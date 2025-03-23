@@ -1,15 +1,15 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { useMutation, UseMutationResult } from '@tanstack/react-query';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../lib/queryClient';
+import { Capacitor } from '@capacitor/core';
+import { getData, storeData } from '../utils/asyncStorage';
 
-// User interface representing the authenticated user
 interface User {
   id: number;
   username: string;
   isAdmin: boolean;
 }
 
-// Context type for the auth context
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
@@ -18,106 +18,147 @@ type AuthContextType = {
   logoutMutation: UseMutationResult<{ success: boolean }, Error, void>;
 };
 
-// Login data interface
 interface LoginData {
   username: string;
   password: string;
 }
 
-// Create the auth context
+// Define a simplified UseMutationResult type just for our needs
+interface UseMutationResult<TData, TError, TVariables> {
+  mutate: (variables: TVariables) => void;
+  isLoading: boolean;
+  isError: boolean;
+  error: TError | null;
+  data?: TData;
+}
+
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-// Auth provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  // Default user for offline mode (in case we can't connect to server)
-  const defaultUser: User = {
-    id: 1,
-    username: 'Rehan',
-    isAdmin: true
-  };
-
-  // Check if user is logged in on component mount
-  React.useEffect(() => {
-    const checkAuth = async () => {
+  
+  // Check for an existing user on mount
+  useEffect(() => {
+    async function checkAuth() {
       try {
         setIsLoading(true);
-        const userData = await apiRequest('/api/user');
-        setUser(userData);
-      } catch (err) {
-        // If we can't connect to the API, use default user in offline mode
-        console.log('Unable to fetch user, using default offline user');
-        setUser(defaultUser);
-        setError(null);
+        
+        // Try to get the user from the server
+        if (Capacitor.isNativePlatform()) {
+          // On mobile, check for a stored user in preferences
+          const storedUser = await getData('offline_user');
+          if (storedUser) {
+            setUser(storedUser);
+          }
+        } else {
+          // On web, check with the server
+          try {
+            const userData = await apiRequest('/api/user');
+            setUser(userData);
+          } catch (error) {
+            // Not authenticated or server error
+            console.log('Not authenticated or server error:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setError(error instanceof Error ? error : new Error('Unknown error'));
       } finally {
         setIsLoading(false);
       }
-    };
-
+    }
+    
     checkAuth();
   }, []);
-
+  
+  // Create a default user for offline mode
+  const defaultUser: User = {
+    id: 1,
+    username: 'admin',
+    isAdmin: true
+  };
+  
   // Login mutation
-  const loginMutation = useMutation<User, Error, LoginData>({
+  const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const user = await apiRequest('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-      return user;
+      try {
+        setError(null);
+        
+        if (Capacitor.isNativePlatform()) {
+          // In offline mode, just simulate a successful login
+          await storeData('offline_user', defaultUser);
+          return defaultUser;
+        } else {
+          // Try to log in with the server
+          return await apiRequest('/api/login', 'POST', credentials);
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        throw error instanceof Error ? error : new Error('Login failed');
+      }
     },
     onSuccess: (user: User) => {
       setUser(user);
-      setError(null);
     },
     onError: (error: Error) => {
       setError(error);
-    },
+    }
   });
-
+  
   // Logout mutation
-  const logoutMutation = useMutation<{ success: boolean }, Error, void>({
+  const logoutMutation = useMutation({
     mutationFn: async () => {
-      const result = await apiRequest('/api/logout', {
-        method: 'POST',
-      });
-      return result;
+      try {
+        setError(null);
+        
+        if (Capacitor.isNativePlatform()) {
+          // In offline mode, just remove the stored user
+          // Don't actually remove it since we want to stay logged in
+          // This is a simplification for this demo
+          return { success: true };
+        } else {
+          // Try to log out with the server
+          return await apiRequest('/api/logout', 'POST');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+        throw error instanceof Error ? error : new Error('Logout failed');
+      }
     },
     onSuccess: () => {
-      setUser(null);
+      // Only actually log out on web
+      if (!Capacitor.isNativePlatform()) {
+        setUser(null);
+      }
     },
     onError: (error: Error) => {
       setError(error);
-    },
+    }
   });
-
-  // Provide auth context to children
+  
+  const value: AuthContextType = {
+    user,
+    isLoading,
+    error,
+    loginMutation,
+    logoutMutation
+  };
+  
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        error,
-        loginMutation,
-        logoutMutation,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Hook to use auth context
 export function useAuth() {
   const context = useContext(AuthContext);
+  
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+  
   return context;
 }

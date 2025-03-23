@@ -1,8 +1,5 @@
-import { QueryClient } from '@tanstack/react-query';
 import { Capacitor } from '@capacitor/core';
-
-// Local server address when running on mobile device
-const LOCAL_SERVER_URL = 'http://localhost:5000';
+import { QueryClient } from '@tanstack/react-query';
 
 /**
  * Get the appropriate API URL based on the environment
@@ -11,16 +8,20 @@ const LOCAL_SERVER_URL = 'http://localhost:5000';
  */
 function getApiUrl(url: string): string {
   if (Capacitor.isNativePlatform()) {
-    // Running on device, use local server
-    if (url.startsWith('/')) {
-      return `${LOCAL_SERVER_URL}${url}`;
-    } else {
-      return `${LOCAL_SERVER_URL}/${url}`;
+    // On mobile, redirect to local server
+    const localServerUrl = 'http://localhost:5000';
+    
+    // If URL already starts with http, don't modify it (likely an external API)
+    if (url.startsWith('http')) {
+      return url;
     }
-  } else {
-    // Running in browser, use relative URLs
-    return url;
+    
+    // Add local server URL as prefix
+    return `${localServerUrl}${url}`;
   }
+  
+  // In web, use relative URLs
+  return url;
 }
 
 /**
@@ -28,15 +29,19 @@ function getApiUrl(url: string): string {
  */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    const error = new Error(
-      errorData.message || `API error: ${res.status} ${res.statusText}`
-    );
-    throw Object.assign(error, {
-      status: res.status,
-      statusText: res.statusText,
-      data: errorData,
-    });
+    let errorMessage = `API Error: ${res.status} ${res.statusText}`;
+    
+    try {
+      const data = await res.json();
+      if (data.error) {
+        errorMessage = data.error;
+      }
+    } catch (e) {
+      // Unable to parse JSON error message, use default
+    }
+    
+    const error = new Error(errorMessage);
+    throw error;
   }
 }
 
@@ -48,73 +53,76 @@ export async function apiRequest(
   options: RequestInit = {}
 ): Promise<any> {
   try {
-    // Transform the URL to point to the local server when on device
     const apiUrl = getApiUrl(url);
     
-    // Default options for fetch
+    // Set default headers if not provided
     const defaultOptions: RequestInit = {
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    };
-    
-    // Merge the default options with provided options
-    const mergedOptions = {
-      ...defaultOptions,
-      ...options,
-      headers: {
-        ...defaultOptions.headers,
         ...options.headers,
       },
     };
     
-    // Make the request
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    console.log(`[API] ${mergedOptions.method || 'GET'} ${apiUrl}`);
+    
     const res = await fetch(apiUrl, mergedOptions);
     
-    // Throw for non-200 responses
     await throwIfResNotOk(res);
     
-    // Parse the response as JSON
-    return res.json();
+    // For 204 No Content, return empty object
+    if (res.status === 204) {
+      return {};
+    }
+    
+    return await res.json();
   } catch (error) {
-    console.error(`[API] Request failed: ${url}`, error);
+    console.error(`[API] Request failed for ${url}:`, error);
     throw error;
   }
 }
 
-// Custom queryFn for handling 401 responses
 type UnauthorizedBehavior = "returnNull" | "throw";
+
+/**
+ * Creates a query function for TanStack Query
+ */
 export const getQueryFn = <T>(options: {
   on401: UnauthorizedBehavior;
 }) => {
-  return async (context: { queryKey: (string | undefined)[] }): Promise<T | null> => {
+  return async ({ queryKey }: { queryKey: string[] }): Promise<T | null> => {
     try {
-      const [url] = context.queryKey;
+      const [url, ...params] = queryKey;
       
-      if (!url) {
-        throw new Error("URL is required in queryKey[0]");
+      // Handle query params if provided
+      let finalUrl = url;
+      if (params.length > 0 && typeof params[0] === 'object') {
+        const queryParams = new URLSearchParams(params[0] as Record<string, string>).toString();
+        finalUrl = `${url}?${queryParams}`;
       }
       
-      return await apiRequest(url);
-    } catch (error: any) {
-      if (error.status === 401 && options.on401 === "returnNull") {
-        return null;
+      return await apiRequest(finalUrl);
+    } catch (error) {
+      // Handle 401 Unauthorized based on options
+      if (error instanceof Response && error.status === 401) {
+        if (options.on401 === "returnNull") {
+          return null;
+        }
       }
+      
       throw error;
     }
   };
 };
 
-// Create the query client
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      retry: false,
-      queryFn: getQueryFn({ on401: "returnNull" }),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 1,
+      queryFn: getQueryFn<unknown>({ on401: "returnNull" }),
     },
   },
 });
-
-export default queryClient;

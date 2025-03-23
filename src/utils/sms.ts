@@ -1,5 +1,38 @@
 import { Capacitor } from '@capacitor/core';
 
+interface CordovaSMSPlugin {
+  hasPermission: (
+    successCallback: (hasPermission: boolean) => void,
+    errorCallback: (error: any) => void
+  ) => void;
+  requestPermission: (
+    successCallback: (hasPermission: boolean) => void,
+    errorCallback: (error: any) => void
+  ) => void;
+  send: (
+    phoneNumber: string | string[],
+    message: string,
+    options: {
+      replaceLineBreaks?: boolean;
+      android?: {
+        intent?: string;
+      };
+    },
+    successCallback: () => void,
+    errorCallback: (error: any) => void
+  ) => void;
+}
+
+declare global {
+  interface Window {
+    cordova?: {
+      plugins?: {
+        sms?: CordovaSMSPlugin;
+      };
+    };
+  }
+}
+
 /**
  * Send an SMS via Cordova SMS plugin
  * @param phoneNumber The recipient's phone number
@@ -8,47 +41,47 @@ import { Capacitor } from '@capacitor/core';
  */
 export const sendSMS = async (phoneNumber: string, message: string): Promise<boolean> => {
   try {
-    // Only attempt to send SMS if running on a native platform
+    // Not available in web environment
     if (!Capacitor.isNativePlatform()) {
-      console.log(`[SMS] Not running on a native platform, would send message to ${phoneNumber}: ${message}`);
+      console.log('[SMS] Not running on native platform, SMS not available');
       return false;
     }
-
-    // Ensure SMS permissions
+    
+    // Check if Cordova SMS plugin is available
+    if (!window.cordova?.plugins?.sms) {
+      console.error('[SMS] Cordova SMS plugin is not available');
+      return false;
+    }
+    
+    // Check permission
     const hasPermission = await checkSMSPermissions();
     if (!hasPermission) {
+      console.log('[SMS] Requesting SMS permissions');
       const granted = await requestSMSPermissions();
       if (!granted) {
         console.error('[SMS] SMS permissions not granted');
         return false;
       }
     }
-
-    // Use Cordova plugin to send SMS
-    // @ts-ignore - Access window object for Cordova plugin
-    if (window.sms) {
-      return new Promise((resolve) => {
-        // @ts-ignore - Access window object for Cordova plugin
-        window.sms.send(
-          phoneNumber,
-          message,
-          { replaceLineBreaks: true },
-          () => {
-            console.log(`[SMS] Message sent to ${phoneNumber}`);
-            resolve(true);
-          },
-          (error: any) => {
-            console.error(`[SMS] Error sending message to ${phoneNumber}:`, error);
-            resolve(false);
-          }
-        );
-      });
-    } else {
-      console.error('[SMS] SMS plugin not available');
-      return false;
-    }
+    
+    // Send the SMS
+    return new Promise((resolve) => {
+      window.cordova!.plugins.sms!.send(
+        phoneNumber,
+        message,
+        { replaceLineBreaks: true },
+        () => {
+          console.log('[SMS] Message sent successfully');
+          resolve(true);
+        },
+        (error) => {
+          console.error('[SMS] Error sending message:', error);
+          resolve(false);
+        }
+      );
+    });
   } catch (error) {
-    console.error('[SMS] Error sending SMS:', error);
+    console.error('[SMS] Error in sendSMS:', error);
     return false;
   }
 };
@@ -59,28 +92,26 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
  */
 export const checkSMSPermissions = async (): Promise<boolean> => {
   try {
+    // Not available in web environment
     if (!Capacitor.isNativePlatform()) {
       return false;
     }
-
-    // For Android, we need to check permissions
-    // @ts-ignore - Access window object for Cordova plugin
-    if (window.sms && window.sms.hasPermission) {
-      return new Promise((resolve) => {
-        // @ts-ignore - Access window object for Cordova plugin
-        window.sms.hasPermission(
-          (hasPermission: boolean) => {
-            resolve(hasPermission);
-          },
-          () => {
-            resolve(false);
-          }
-        );
-      });
+    
+    // Check if Cordova SMS plugin is available
+    if (!window.cordova?.plugins?.sms) {
+      return false;
     }
-
-    // iOS doesn't need explicit SMS permissions
-    return true;
+    
+    return new Promise((resolve) => {
+      window.cordova!.plugins.sms!.hasPermission(
+        (hasPermission) => {
+          resolve(hasPermission);
+        },
+        () => {
+          resolve(false);
+        }
+      );
+    });
   } catch (error) {
     console.error('[SMS] Error checking SMS permissions:', error);
     return false;
@@ -93,30 +124,47 @@ export const checkSMSPermissions = async (): Promise<boolean> => {
  */
 export const requestSMSPermissions = async (): Promise<boolean> => {
   try {
+    // Not available in web environment
     if (!Capacitor.isNativePlatform()) {
       return false;
     }
-
-    // For Android, we need to request permissions
-    // @ts-ignore - Access window object for Cordova plugin
-    if (window.sms && window.sms.requestPermission) {
-      return new Promise((resolve) => {
-        // @ts-ignore - Access window object for Cordova plugin
-        window.sms.requestPermission(
-          (granted: boolean) => {
-            resolve(granted);
-          },
-          () => {
-            resolve(false);
-          }
-        );
-      });
+    
+    // Check if Cordova SMS plugin is available
+    if (!window.cordova?.plugins?.sms) {
+      return false;
     }
-
-    // iOS doesn't need explicit SMS permissions
-    return true;
+    
+    return new Promise((resolve) => {
+      window.cordova!.plugins.sms!.requestPermission(
+        (hasPermission) => {
+          resolve(hasPermission);
+        },
+        () => {
+          resolve(false);
+        }
+      );
+    });
   } catch (error) {
     console.error('[SMS] Error requesting SMS permissions:', error);
     return false;
+  }
+};
+
+/**
+ * Generate a SMS link that can be used to open the default SMS app
+ * @param phoneNumber The recipient's phone number
+ * @param message The message to send
+ * @returns The SMS link
+ */
+export const getSMSLink = (phoneNumber: string, message: string): string => {
+  try {
+    // URL encode the message
+    const encodedMessage = encodeURIComponent(message);
+    
+    // iOS and Android use the same format
+    return `sms:${phoneNumber}${encodedMessage ? `?body=${encodedMessage}` : ''}`;
+  } catch (error) {
+    console.error('[SMS] Error generating SMS link:', error);
+    return `sms:${phoneNumber}`;
   }
 };
