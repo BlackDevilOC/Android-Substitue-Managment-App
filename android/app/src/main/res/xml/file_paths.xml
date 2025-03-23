@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <!-- Define the file paths that can be shared with other apps -->
+    <external-path name="external_files" path="." />
+    <cache-path name="cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <files-path name="files" path="." />
+    <!-- Paths for Capacitor's File plugin -->
+    <external-path name="my_images" path="Pictures" />
+    <external-path name="my_downloads" path="Download" />
 </paths>

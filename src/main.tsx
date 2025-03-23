@@ -5,7 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './hooks/use-auth';
 import { MobileServerProvider } from './components/MobileServerProvider';
-import { registerPlugins } from './capacitor-plugins';
+import { initializeCapacitorPlugins } from './capacitor.plugins.js';
 import { SMSService } from './services/SMSService';
 
 /**
@@ -14,7 +14,7 @@ import { SMSService } from './services/SMSService';
 async function initializeApp() {
   try {
     // Register Capacitor plugins for mobile platforms
-    await registerPlugins();
+    await initializeCapacitorPlugins();
     
     // Process any pending SMS messages in the queue
     await SMSService.processQueue();
