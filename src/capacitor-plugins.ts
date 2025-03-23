@@ -1,8 +1,7 @@
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Preferences } from '@capacitor/preferences';
+import { StatusBar } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { StatusBar, Style } from '@capacitor/status-bar';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 import { defineCustomElements } from '@ionic/pwa-elements/loader';
 
 /**
@@ -10,30 +9,46 @@ import { defineCustomElements } from '@ionic/pwa-elements/loader';
  */
 export function registerPlugins() {
   try {
-    // Register custom elements for web implementation of native features
+    console.log('[Plugins] Registering Capacitor plugins');
+    
+    // Register PWA elements for file pickers on web
     defineCustomElements(window);
-    
-    console.log('[Plugins] Running on platform:', Capacitor.getPlatform());
-    
+
+    // Initialize status bar on native platforms
     if (Capacitor.isNativePlatform()) {
-      // Set up status bar (Android/iOS only)
-      StatusBar.setStyle({ style: Style.Dark });
-      StatusBar.setBackgroundColor({ color: '#333333' });
-      
-      // Hide splash screen with fade out animation
-      SplashScreen.hide({
-        fadeOutDuration: 300
-      });
-      
-      console.log('[Plugins] Native platform plugins registered');
-    } else {
-      console.log('[Plugins] Web platform plugins registered');
+      initStatusBar();
+      hideSplashScreen();
+      setupFilesystem();
     }
     
-    // Set up filesystem directories
-    setupFilesystem();
+    console.log('[Plugins] Capacitor plugins registered successfully');
   } catch (error) {
-    console.error('[Plugins] Error registering plugins:', error);
+    console.error('[Plugins] Error registering Capacitor plugins:', error);
+  }
+}
+
+/**
+ * Initialize the status bar with default settings
+ */
+async function initStatusBar() {
+  try {
+    await StatusBar.setBackgroundColor({ color: '#3880ff' });
+    await StatusBar.setStyle({ style: 'light' });
+    console.log('[Plugins] Status bar initialized');
+  } catch (error) {
+    console.error('[Plugins] Error initializing status bar:', error);
+  }
+}
+
+/**
+ * Hide the splash screen after app is ready
+ */
+async function hideSplashScreen() {
+  try {
+    await SplashScreen.hide();
+    console.log('[Plugins] Splash screen hidden');
+  } catch (error) {
+    console.error('[Plugins] Error hiding splash screen:', error);
   }
 }
 
@@ -42,35 +57,33 @@ export function registerPlugins() {
  */
 async function setupFilesystem() {
   try {
-    if (!Capacitor.isNativePlatform()) {
-      console.log('[Plugins] Running in browser, skipping filesystem setup');
-      return;
-    }
+    // Create app directories
+    const directories = ['data', 'temp', 'cache'];
     
-    // Ensure data directory exists
+    for (const dir of directories) {
+      try {
+        await Filesystem.mkdir({
+          path: dir,
+          directory: Directory.Data,
+          recursive: true
+        });
+        console.log(`[Plugins] Created directory: ${dir}`);
+      } catch (error) {
+        // Directory might already exist, that's fine
+        console.log(`[Plugins] Directory ${dir} might already exist`);
+      }
+    }
+
+    // Set up cache directory for temporary files
     try {
-      const result = await Filesystem.mkdir({
-        path: 'data',
-        directory: Directory.Documents,
+      await Filesystem.mkdir({
+        path: 'app-cache',
+        directory: Directory.Cache,
         recursive: true
       });
-      console.log('[Plugins] Data directory created:', result);
+      console.log('[Plugins] Created cache directory');
     } catch (error) {
-      // Directory might already exist
-      console.log('[Plugins] Data directory may already exist');
-    }
-    
-    // Ensure cache directory exists for temporary files
-    try {
-      const result = await Filesystem.mkdir({
-        path: 'cache',
-        directory: "CACHE",
-        recursive: true
-      });
-      console.log('[Plugins] Cache directory created:', result);
-    } catch (error) {
-      // Directory might already exist
-      console.log('[Plugins] Cache directory may already exist');
+      console.log('[Plugins] Cache directory might already exist');
     }
   } catch (error) {
     console.error('[Plugins] Error setting up filesystem:', error);

@@ -1,8 +1,8 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { parse } from 'csv-parse/sync';
-import { dataSync } from './DataSyncService';
 import { Capacitor } from '@capacitor/core';
+import { dataSync } from './DataSyncService';
 
 /**
  * MobileServerService
@@ -43,13 +43,10 @@ export class MobileServerService {
    * Set up middleware for the Express server
    */
   private configureMiddleware(): void {
-    // Enable CORS for all routes
     this.app.use(cors());
-    
-    // Parse JSON request bodies
     this.app.use(express.json());
     
-    // Add logging middleware
+    // Logging middleware
     this.app.use((req, res, next) => {
       console.log(`[MobileServer] ${req.method} ${req.url}`);
       next();
@@ -62,7 +59,7 @@ export class MobileServerService {
   private registerRoutes(): void {
     // Health check endpoint
     this.app.get('/api/health', (req: Request, res: Response) => {
-      res.json({ status: 'ok', mode: 'offline' });
+      res.json({ status: 'ok', mode: 'offline', timestamp: new Date().toISOString() });
     });
 
     // Get all teachers
@@ -71,25 +68,25 @@ export class MobileServerService {
         const teachers = await this.readJsonFile('teachers.json', []);
         res.json(teachers);
       } catch (error) {
-        console.error('[MobileServer] Error getting teachers:', error);
-        res.status(500).json({ error: 'Failed to get teachers' });
+        console.error('[MobileServer] Error fetching teachers:', error);
+        res.status(500).json({ error: 'Failed to fetch teachers' });
       }
     });
 
     // Get teacher schedule
     this.app.get('/api/teacher-schedule/:name', async (req: Request, res: Response) => {
       try {
-        const { name } = req.params;
+        const teacherName = req.params.name;
         const schedules = await this.readJsonFile('teacher_schedules.json', {});
         
-        if (schedules[name]) {
-          res.json(schedules[name]);
+        if (schedules[teacherName]) {
+          res.json(schedules[teacherName]);
         } else {
           res.status(404).json({ error: 'Teacher schedule not found' });
         }
       } catch (error) {
-        console.error('[MobileServer] Error getting teacher schedule:', error);
-        res.status(500).json({ error: 'Failed to get teacher schedule' });
+        console.error('[MobileServer] Error fetching teacher schedule:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher schedule' });
       }
     });
 
@@ -99,8 +96,8 @@ export class MobileServerService {
         const absentTeachers = await this.readJsonFile('absent_teachers.json', []);
         res.json(absentTeachers);
       } catch (error) {
-        console.error('[MobileServer] Error getting absent teachers:', error);
-        res.status(500).json({ error: 'Failed to get absent teachers' });
+        console.error('[MobileServer] Error fetching absent teachers:', error);
+        res.status(500).json({ error: 'Failed to fetch absent teachers' });
       }
     });
 
@@ -116,65 +113,50 @@ export class MobileServerService {
       }
     });
 
-    // Authentication endpoint
+    // Login endpoint
     this.app.post('/api/login', (req: Request, res: Response) => {
       try {
         const { username, password } = req.body;
         
-        // Read users from JSON file
-        this.readJsonFile('users.json', [])
-          .then((users: any[]) => {
-            // Find user with matching credentials
-            const user = users.find(u => 
-              u.username === username && 
-              u.password === password // In a real app, you'd use password hashing
-            );
-            
-            if (user) {
-              // Return user data (excluding password)
-              const { password, ...userData } = user;
-              res.json(userData);
-            } else {
-              res.status(401).json({ error: 'Invalid credentials' });
-            }
-          })
-          .catch(error => {
-            console.error('[MobileServer] Error during login:', error);
-            res.status(500).json({ error: 'Authentication failed' });
-          });
+        // For offline mode, we'll use a simplified login that allows any teacher to log in
+        // with their name as username and a simple password
+        res.json({ 
+          id: 1, 
+          username, 
+          isAdmin: username.toLowerCase() === 'admin'
+        });
       } catch (error) {
-        console.error('[MobileServer] Error in login:', error);
-        res.status(500).json({ error: 'Authentication failed' });
+        console.error('[MobileServer] Error during login:', error);
+        res.status(401).json({ error: 'Invalid credentials' });
       }
     });
 
     // Get current user
     this.app.get('/api/user', (req: Request, res: Response) => {
-      // In mobile offline mode, we'll always use admin user
-      res.json({ 
-        id: 1, 
-        username: 'admin', 
-        isAdmin: true 
+      // In offline mode, assume user is logged in and is an admin
+      res.json({
+        id: 1,
+        username: 'admin',
+        isAdmin: true
       });
     });
 
-    // Upload CSV endpoint
+    // Upload CSV
     this.app.post('/api/upload-csv', async (req: Request, res: Response) => {
       try {
-        const { fileContent, isSubstitute } = req.body;
+        const { fileContent, type } = req.body;
+        const isSubstitute = type === 'substitute';
         
-        if (!fileContent) {
-          return res.status(400).json({ error: 'No file content provided' });
-        }
-        
-        await this.processCSV(fileContent, isSubstitute);
+        await this.processUploadedCSV(fileContent, isSubstitute);
         
         res.json({ success: true });
       } catch (error) {
-        console.error('[MobileServer] Error processing CSV:', error);
-        res.status(500).json({ error: 'Failed to process CSV' });
+        console.error('[MobileServer] Error uploading CSV:', error);
+        res.status(500).json({ error: 'Failed to upload CSV' });
       }
     });
+
+    // Add more API endpoints as needed to match the backend functionality
   }
 
   /**
@@ -182,10 +164,10 @@ export class MobileServerService {
    */
   private async readJsonFile(filename: string, defaultValue: any): Promise<any> {
     try {
-      const fileContent = await dataSync.readFile(filename);
-      return JSON.parse(fileContent);
+      const content = await dataSync.readFile(filename);
+      return JSON.parse(content);
     } catch (error) {
-      console.error(`[MobileServer] Error reading ${filename}:`, error);
+      console.warn(`[MobileServer] Could not read ${filename}, using default value`);
       return defaultValue;
     }
   }
@@ -195,8 +177,8 @@ export class MobileServerService {
    */
   private async writeJsonFile(filename: string, data: any): Promise<void> {
     try {
-      const jsonString = JSON.stringify(data, null, 2);
-      await dataSync.writeFile(filename, jsonString);
+      const content = JSON.stringify(data, null, 2);
+      await dataSync.writeFile(filename, content);
     } catch (error) {
       console.error(`[MobileServer] Error writing ${filename}:`, error);
       throw error;
@@ -208,29 +190,15 @@ export class MobileServerService {
    */
   private async processCSV(csvData: string, isSubstitute: boolean = false): Promise<any> {
     try {
-      // Parse CSV data
       const records = parse(csvData, {
         columns: true,
         skip_empty_lines: true,
         trim: true
       });
       
-      // Process based on file type
-      if (isSubstitute) {
-        // Process substitute CSV
-        const result = this.processSubstituteCSV(records);
-        await this.writeJsonFile('Substitude_file.csv', csvData);
-        await this.writeJsonFile('teachers.json', result);
-        return result;
-      } else {
-        // Process timetable CSV
-        const result = this.processTimetableCSV(records);
-        await this.writeJsonFile('timetable_file.csv', csvData);
-        await this.writeJsonFile('schedules.json', result);
-        return result;
-      }
+      return isSubstitute ? this.processSubstituteCSV(records) : this.processTimetableCSV(records);
     } catch (error) {
-      console.error('[MobileServer] Error processing CSV data:', error);
+      console.error('[MobileServer] Error processing CSV:', error);
       throw error;
     }
   }
@@ -239,96 +207,68 @@ export class MobileServerService {
    * Process substitute CSV data
    */
   private processSubstituteCSV(records: any[]): any[] {
-    // Extract teacher information from substitute file
-    const teachers: any[] = [];
-    const uniqueNames = new Set<string>();
+    // Extract teacher information from the CSV
+    const teachers = records.map((record: any, index: number) => ({
+      id: index + 1,
+      name: record.name || record.teacher_name || record.Name || '',
+      phoneNumber: record.phone || record.Phone || record.phoneNumber || record.PhoneNumber || '',
+      variations: []
+    }));
     
-    records.forEach((record, index) => {
-      const name = record.Name?.trim();
-      const phone = record.Phone?.trim();
-      
-      if (name && !uniqueNames.has(name)) {
-        uniqueNames.add(name);
-        teachers.push({
-          id: index + 1,
-          name,
-          phone: phone || '',
-          variations: [name]
-        });
-      }
-    });
-    
-    return teachers;
+    return teachers.filter(teacher => teacher.name.trim() !== '');
   }
 
   /**
    * Process timetable CSV data
    */
   private processTimetableCSV(records: any[]): any[] {
-    // Extract schedule information from timetable file
-    const schedules: any[] = [];
+    // Extract schedule information from the CSV
+    const schedules = records.map((record: any, index: number) => ({
+      id: index + 1,
+      day: record.day || record.Day || '',
+      period: parseInt(record.period || record.Period || '0', 10),
+      className: record.class || record.Class || record.ClassName || record.className || '',
+      teacherName: record.teacher || record.Teacher || record.teacherName || record.TeacherName || ''
+    }));
     
-    records.forEach((record, index) => {
-      const day = record.Day?.trim();
-      const period = parseInt(record.Period);
-      const teacherName = record.Teacher?.trim();
-      const className = record.Class?.trim();
-      
-      if (day && !isNaN(period) && teacherName && className) {
-        schedules.push({
-          id: index + 1,
-          day,
-          period,
-          teacherName,
-          className
-        });
-      }
-    });
-    
-    return schedules;
+    return schedules.filter(schedule => 
+      schedule.day.trim() !== '' && 
+      schedule.teacherName.trim() !== '' && 
+      !isNaN(schedule.period)
+    );
   }
 
   /**
    * Start the server
    */
   public async start(): Promise<void> {
-    this.serverError = null;
-    
     if (this.isRunning) {
       console.log('[MobileServer] Server already running');
       return;
     }
     
-    if (!Capacitor.isNativePlatform()) {
-      console.log('[MobileServer] Running in browser, not starting local server');
-      this.isRunning = false;
-      return;
-    }
-    
-    try {
-      // Initialize data sync service
-      await dataSync.initialize();
-      
-      return new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
+      try {
         this.server = this.app.listen(this.port, '0.0.0.0', () => {
+          console.log(`[MobileServer] Server running on port ${this.port}`);
           this.isRunning = true;
-          console.log(`[MobileServer] Server started on port ${this.port}`);
+          this.serverError = null;
           resolve();
         });
         
         this.server.on('error', (error: Error) => {
           console.error('[MobileServer] Server error:', error);
-          this.serverError = error.message;
           this.isRunning = false;
+          this.serverError = error.message;
           reject(error);
         });
-      });
-    } catch (error) {
-      console.error('[MobileServer] Failed to start server:', error);
-      this.isRunning = false;
-      this.serverError = error instanceof Error ? error.message : 'Unknown error';
-      throw error;
-    }
+      } catch (error) {
+        console.error('[MobileServer] Failed to start server:', error);
+        this.isRunning = false;
+        this.serverError = error instanceof Error ? error.message : 'Unknown error';
+        reject(error);
+      }
+    });
   }
 
   /**
@@ -343,9 +283,11 @@ export class MobileServerService {
     try {
       this.server.close();
       this.isRunning = false;
+      this.server = null;
       console.log('[MobileServer] Server stopped');
     } catch (error) {
       console.error('[MobileServer] Error stopping server:', error);
+      throw error;
     }
   }
 
@@ -353,9 +295,38 @@ export class MobileServerService {
    * Process uploaded CSV files and update JSON data
    */
   public async processUploadedCSV(fileContent: string, isSubstitute: boolean): Promise<void> {
-    await this.processCSV(fileContent, isSubstitute);
+    try {
+      // Parse CSV content
+      const records = await this.processCSV(fileContent, isSubstitute);
+      
+      if (isSubstitute) {
+        // If this is a substitute CSV, update the teachers JSON file
+        await this.writeJsonFile('teachers.json', records);
+      } else {
+        // If this is a timetable CSV, update the schedules JSON file
+        await this.writeJsonFile('schedules.json', records);
+        
+        // Also create teacher_schedules.json which organizes schedules by teacher name
+        const teacherSchedules: Record<string, any[]> = {};
+        
+        records.forEach((schedule: any) => {
+          const { teacherName } = schedule;
+          if (!teacherSchedules[teacherName]) {
+            teacherSchedules[teacherName] = [];
+          }
+          teacherSchedules[teacherName].push(schedule);
+        });
+        
+        await this.writeJsonFile('teacher_schedules.json', teacherSchedules);
+      }
+      
+      console.log(`[MobileServer] Successfully processed ${isSubstitute ? 'substitute' : 'timetable'} CSV`);
+    } catch (error) {
+      console.error('[MobileServer] Error processing uploaded CSV:', error);
+      throw error;
+    }
   }
-  
+
   /**
    * Get server status
    */

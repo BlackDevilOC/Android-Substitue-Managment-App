@@ -9,20 +9,23 @@ import { Capacitor } from '@capacitor/core';
  */
 export const storeData = async (key: string, value: any) => {
   try {
-    // Convert value to string if it's not already
-    const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
+    const jsonValue = JSON.stringify(value);
     
     if (Capacitor.isNativePlatform()) {
-      // On native platforms, use Capacitor Preferences
-      await Preferences.set({ key, value: valueToStore });
+      // Use Capacitor Preferences on native platforms
+      await Preferences.set({
+        key,
+        value: jsonValue,
+      });
     } else {
-      // In web, fall back to localStorage
-      localStorage.setItem(key, valueToStore);
+      // Fall back to localStorage on web
+      localStorage.setItem(key, jsonValue);
     }
     
+    console.log(`[Storage] Stored data for key: ${key}`);
     return true;
   } catch (error) {
-    console.error(`[AsyncStorage] Error storing data for key ${key}:`, error);
+    console.error(`[Storage] Error storing data for key ${key}:`, error);
     return false;
   }
 };
@@ -34,29 +37,25 @@ export const storeData = async (key: string, value: any) => {
  */
 export const getData = async (key: string) => {
   try {
-    let value: string | null = null;
+    let jsonValue: string | null = null;
     
     if (Capacitor.isNativePlatform()) {
-      // On native platforms, use Capacitor Preferences
+      // Use Capacitor Preferences on native platforms
       const result = await Preferences.get({ key });
-      value = result.value;
+      jsonValue = result.value;
     } else {
-      // In web, fall back to localStorage
-      value = localStorage.getItem(key);
+      // Fall back to localStorage on web
+      jsonValue = localStorage.getItem(key);
     }
     
-    if (value === null) {
+    if (jsonValue === null) {
+      console.log(`[Storage] No data found for key: ${key}`);
       return null;
     }
     
-    // Try to parse the value as JSON, if it fails return the raw value
-    try {
-      return JSON.parse(value);
-    } catch {
-      return value;
-    }
+    return JSON.parse(jsonValue);
   } catch (error) {
-    console.error(`[AsyncStorage] Error retrieving data for key ${key}:`, error);
+    console.error(`[Storage] Error retrieving data for key ${key}:`, error);
     return null;
   }
 };
@@ -69,16 +68,17 @@ export const getData = async (key: string) => {
 export const removeData = async (key: string) => {
   try {
     if (Capacitor.isNativePlatform()) {
-      // On native platforms, use Capacitor Preferences
+      // Use Capacitor Preferences on native platforms
       await Preferences.remove({ key });
     } else {
-      // In web, fall back to localStorage
+      // Fall back to localStorage on web
       localStorage.removeItem(key);
     }
     
+    console.log(`[Storage] Removed data for key: ${key}`);
     return true;
   } catch (error) {
-    console.error(`[AsyncStorage] Error removing data for key ${key}:`, error);
+    console.error(`[Storage] Error removing data for key ${key}:`, error);
     return false;
   }
 };
@@ -90,16 +90,17 @@ export const removeData = async (key: string) => {
 export const clearStorage = async () => {
   try {
     if (Capacitor.isNativePlatform()) {
-      // On native platforms, use Capacitor Preferences
+      // Use Capacitor Preferences on native platforms
       await Preferences.clear();
     } else {
-      // In web, fall back to localStorage
+      // Fall back to localStorage on web
       localStorage.clear();
     }
     
+    console.log('[Storage] Storage cleared');
     return true;
   } catch (error) {
-    console.error('[AsyncStorage] Error clearing storage:', error);
+    console.error('[Storage] Error clearing storage:', error);
     return false;
   }
 };
@@ -111,22 +112,15 @@ export const clearStorage = async () => {
 export const getAllKeys = async () => {
   try {
     if (Capacitor.isNativePlatform()) {
-      // On native platforms, use Capacitor Preferences
-      const { keys } = await Preferences.keys();
-      return keys;
+      // Use Capacitor Preferences on native platforms
+      const result = await Preferences.keys();
+      return result.keys;
     } else {
-      // In web, fall back to localStorage
-      const keys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-          keys.push(key);
-        }
-      }
-      return keys;
+      // Fall back to localStorage on web
+      return Object.keys(localStorage);
     }
   } catch (error) {
-    console.error('[AsyncStorage] Error getting all keys:', error);
+    console.error('[Storage] Error getting all keys:', error);
     return [];
   }
 };

@@ -1,5 +1,5 @@
-import { storeData, getData, removeData } from '../utils/asyncStorage';
-import { sendSMS as sendSMSNative, getSMSLink } from '../utils/sms';
+import { getData, storeData } from '../utils/asyncStorage';
+import { sendSMS as sendDeviceSMS, getSMSLink } from '../utils/sms';
 import { v4 as uuidv4 } from 'uuid';
 
 interface QueuedMessage {
@@ -28,58 +28,55 @@ export class SMSService {
   private static readonly QUEUE_KEY = 'sms_queue';
   private static readonly HISTORY_KEY = 'sms_history';
   private static readonly MAX_RETRY_ATTEMPTS = 3;
-  
+
   /**
    * Send an SMS message through the device
    * If sending fails, the message will be queued for later attempts
    */
   static async sendSMS(phoneNumber: string, message: string, teacherId: string = '', teacherName: string = '') {
     try {
-      console.log(`[SMSService] Sending SMS to ${phoneNumber}`);
+      console.log(`[SMSService] Sending message to ${phoneNumber}: ${message.substring(0, 30)}...`);
       
-      // Try to send the message immediately
-      const success = await sendSMSNative(phoneNumber, message);
+      // Try to send the message directly
+      const success = await sendDeviceSMS(phoneNumber, message);
       
       if (success) {
-        console.log('[SMSService] Message sent successfully');
+        // Message was sent successfully
+        console.log(`[SMSService] Message sent successfully to ${phoneNumber}`);
         
-        // Record the successful send in history
-        await this.recordSMSHistory(teacherId, teacherName, message, 'sent', 'native');
-        
+        // Record in history
+        await SMSService.recordSMSHistory(phoneNumber, message, 'sent', 'direct', teacherId, teacherName);
         return true;
       } else {
-        console.log('[SMSService] Failed to send message, queuing for later');
+        // Message failed to send, queue it for later
+        console.log(`[SMSService] Failed to send message to ${phoneNumber}, queuing for later`);
+        await SMSService.queueMessage(phoneNumber, message, teacherId, teacherName);
         
-        // Queue the message for later sending
-        await this.queueMessage(phoneNumber, message, teacherId, teacherName);
-        
-        // Record the pending message in history
-        await this.recordSMSHistory(teacherId, teacherName, message, 'pending', 'queue');
-        
+        // Record in history
+        await SMSService.recordSMSHistory(phoneNumber, message, 'pending', 'queued', teacherId, teacherName);
         return false;
       }
     } catch (error) {
-      console.error('[SMSService] Error sending SMS:', error);
+      console.error(`[SMSService] Error sending message to ${phoneNumber}:`, error);
       
-      // Queue the message for later sending
-      await this.queueMessage(phoneNumber, message, teacherId, teacherName);
+      // Queue the message for later attempt
+      await SMSService.queueMessage(phoneNumber, message, teacherId, teacherName);
       
-      // Record the failed message in history
-      await this.recordSMSHistory(teacherId, teacherName, message, 'failed', 'queue');
-      
+      // Record in history
+      await SMSService.recordSMSHistory(phoneNumber, message, 'pending', 'queued', teacherId, teacherName);
       return false;
     }
   }
-  
+
   /**
    * Queue a message for later sending
    */
   private static async queueMessage(phoneNumber: string, message: string, teacherId: string = '', teacherName: string = '') {
     try {
       // Get the current queue
-      const queue = await this.getQueue();
+      const queue = await SMSService.getQueue();
       
-      // Add the message to the queue
+      // Add the new message to the queue
       const queuedMessage: QueuedMessage = {
         phoneNumber,
         message,
@@ -92,27 +89,27 @@ export class SMSService {
       queue.push(queuedMessage);
       
       // Save the updated queue
-      await storeData(this.QUEUE_KEY, queue);
+      await storeData(SMSService.QUEUE_KEY, queue);
       
-      console.log(`[SMSService] Queued message for ${phoneNumber}`);
+      console.log(`[SMSService] Message queued for ${phoneNumber}`);
     } catch (error) {
       console.error('[SMSService] Error queuing message:', error);
     }
   }
-  
+
   /**
    * Get the current message queue
    */
   private static async getQueue(): Promise<QueuedMessage[]> {
     try {
-      const queue = await getData(this.QUEUE_KEY);
-      return Array.isArray(queue) ? queue : [];
+      const queue = await getData(SMSService.QUEUE_KEY);
+      return queue || [];
     } catch (error) {
       console.error('[SMSService] Error getting queue:', error);
       return [];
     }
   }
-  
+
   /**
    * Process the message queue, attempting to send queued messages
    */
@@ -121,84 +118,83 @@ export class SMSService {
       console.log('[SMSService] Processing message queue');
       
       // Get the current queue
-      const queue = await this.getQueue();
+      const queue = await SMSService.getQueue();
       
       if (queue.length === 0) {
-        console.log('[SMSService] Queue is empty');
+        console.log('[SMSService] Queue is empty, nothing to process');
         return;
       }
       
-      console.log(`[SMSService] Found ${queue.length} queued messages`);
+      console.log(`[SMSService] Found ${queue.length} messages in queue`);
       
       // Process each message in the queue
-      const updatedQueue: QueuedMessage[] = [];
+      const remainingMessages: QueuedMessage[] = [];
       
       for (const message of queue) {
-        // Increment the attempt counter
-        message.attempts++;
-        
-        // Skip messages that have exceeded the retry limit
-        if (message.attempts > this.MAX_RETRY_ATTEMPTS) {
-          console.log(`[SMSService] Dropping message to ${message.phoneNumber} after ${message.attempts} attempts`);
-          
-          // Record the failed message in history
-          await this.recordSMSHistory(
-            message.teacherId,
-            message.teacherName,
+        // Skip messages that have too many failed attempts
+        if (message.attempts >= SMSService.MAX_RETRY_ATTEMPTS) {
+          console.log(`[SMSService] Message to ${message.phoneNumber} has failed too many times, marking as failed`);
+          await SMSService.recordSMSHistory(
+            message.phoneNumber,
             message.message,
             'failed',
-            'queue-expired'
+            'exceeded_attempts',
+            message.teacherId,
+            message.teacherName
           );
-          
           continue;
         }
         
         // Try to send the message
-        const success = await sendSMSNative(message.phoneNumber, message.message);
+        console.log(`[SMSService] Attempting to send queued message to ${message.phoneNumber} (attempt ${message.attempts + 1})`);
+        
+        const success = await sendDeviceSMS(message.phoneNumber, message.message);
         
         if (success) {
-          console.log(`[SMSService] Successfully sent queued message to ${message.phoneNumber}`);
+          // Message was sent successfully
+          console.log(`[SMSService] Queued message sent successfully to ${message.phoneNumber}`);
           
-          // Record the successful send in history
-          await this.recordSMSHistory(
-            message.teacherId,
-            message.teacherName,
+          // Record in history
+          await SMSService.recordSMSHistory(
+            message.phoneNumber,
             message.message,
             'sent',
-            'queue-retry'
+            'queue_retry',
+            message.teacherId,
+            message.teacherName
           );
         } else {
-          console.log(`[SMSService] Failed to send queued message to ${message.phoneNumber}, attempt ${message.attempts}`);
+          // Message failed to send, increment attempts and keep in queue
+          console.log(`[SMSService] Failed to send queued message to ${message.phoneNumber}`);
           
-          // Keep the message in the queue for the next attempt
-          updatedQueue.push(message);
+          message.attempts++;
+          remainingMessages.push(message);
         }
       }
       
       // Save the updated queue
-      await storeData(this.QUEUE_KEY, updatedQueue);
+      await storeData(SMSService.QUEUE_KEY, remainingMessages);
       
-      console.log(`[SMSService] Queue processing complete, ${updatedQueue.length} messages remaining`);
+      console.log(`[SMSService] Queue processing complete, ${remainingMessages.length} messages remaining`);
     } catch (error) {
       console.error('[SMSService] Error processing queue:', error);
     }
   }
-  
+
   /**
    * Record SMS send history
    */
   private static async recordSMSHistory(
-    teacherId: string,
-    teacherName: string,
+    phoneNumber: string,
     message: string,
     status: 'pending' | 'sent' | 'failed',
-    method: string
+    method: string,
+    teacherId: string,
+    teacherName: string
   ) {
     try {
-      // Get the current history
-      const history = await this.getHistory();
+      const history = await SMSService.getHistory();
       
-      // Create a new history entry
       const entry: SMSHistoryEntry = {
         id: uuidv4(),
         teacherId,
@@ -209,57 +205,57 @@ export class SMSService {
         method
       };
       
-      // Add the entry to history
       history.unshift(entry); // Add to beginning of array
       
-      // Limit history to 100 entries
-      const limitedHistory = history.slice(0, 100);
+      // Limit history to last 100 entries
+      if (history.length > 100) {
+        history.length = 100;
+      }
       
-      // Save the updated history
-      await storeData(this.HISTORY_KEY, limitedHistory);
+      await storeData(SMSService.HISTORY_KEY, history);
     } catch (error) {
       console.error('[SMSService] Error recording SMS history:', error);
     }
   }
-  
+
   /**
    * Get SMS send history
    */
   static async getHistory(): Promise<SMSHistoryEntry[]> {
     try {
-      const history = await getData(this.HISTORY_KEY);
-      return Array.isArray(history) ? history : [];
+      const history = await getData(SMSService.HISTORY_KEY);
+      return history || [];
     } catch (error) {
       console.error('[SMSService] Error getting history:', error);
       return [];
     }
   }
-  
+
   /**
    * Clear SMS history
    */
   static async clearHistory() {
     try {
-      await storeData(this.HISTORY_KEY, []);
+      await storeData(SMSService.HISTORY_KEY, []);
       console.log('[SMSService] SMS history cleared');
     } catch (error) {
       console.error('[SMSService] Error clearing history:', error);
     }
   }
-  
+
   /**
    * Get the number of pending messages in the queue
    */
   static async getPendingCount(): Promise<number> {
     try {
-      const queue = await this.getQueue();
+      const queue = await SMSService.getQueue();
       return queue.length;
     } catch (error) {
       console.error('[SMSService] Error getting pending count:', error);
       return 0;
     }
   }
-  
+
   /**
    * Get an SMS link for a given phone number and message
    */

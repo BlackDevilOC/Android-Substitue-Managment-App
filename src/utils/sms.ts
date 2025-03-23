@@ -1,4 +1,7 @@
-import { Capacitor } from '@capacitor/core';
+/**
+ * SMS utility functions for mobile devices
+ * Uses Cordova SMS plugin for sending messages
+ */
 
 interface CordovaSMSPlugin {
   hasPermission: (
@@ -23,6 +26,7 @@ interface CordovaSMSPlugin {
   ) => void;
 }
 
+// Add the cordova plugins property to the Window interface
 declare global {
   interface Window {
     cordova?: {
@@ -40,50 +44,29 @@ declare global {
  * @returns Promise<boolean> True if message was sent successfully
  */
 export const sendSMS = async (phoneNumber: string, message: string): Promise<boolean> => {
-  try {
-    // Not available in web environment
-    if (!Capacitor.isNativePlatform()) {
-      console.log('[SMS] Not running on native platform, SMS not available');
-      return false;
+  return new Promise((resolve, reject) => {
+    if (!window.cordova || !window.cordova.plugins || !window.cordova.plugins.sms) {
+      console.warn('[SMS] Cordova SMS plugin not available');
+      resolve(false);
+      return;
     }
+
+    const smsPlugin = window.cordova.plugins.sms;
     
-    // Check if Cordova SMS plugin is available
-    if (!window.cordova?.plugins?.sms) {
-      console.error('[SMS] Cordova SMS plugin is not available');
-      return false;
-    }
-    
-    // Check permission
-    const hasPermission = await checkSMSPermissions();
-    if (!hasPermission) {
-      console.log('[SMS] Requesting SMS permissions');
-      const granted = await requestSMSPermissions();
-      if (!granted) {
-        console.error('[SMS] SMS permissions not granted');
-        return false;
+    smsPlugin.send(
+      phoneNumber,
+      message,
+      { replaceLineBreaks: false, android: { intent: '' } },
+      () => {
+        console.log(`[SMS] Message sent to ${phoneNumber}`);
+        resolve(true);
+      },
+      (error: any) => {
+        console.error(`[SMS] Failed to send message to ${phoneNumber}:`, error);
+        resolve(false);
       }
-    }
-    
-    // Send the SMS
-    return new Promise((resolve) => {
-      window.cordova!.plugins.sms!.send(
-        phoneNumber,
-        message,
-        { replaceLineBreaks: true },
-        () => {
-          console.log('[SMS] Message sent successfully');
-          resolve(true);
-        },
-        (error) => {
-          console.error('[SMS] Error sending message:', error);
-          resolve(false);
-        }
-      );
-    });
-  } catch (error) {
-    console.error('[SMS] Error in sendSMS:', error);
-    return false;
-  }
+    );
+  });
 };
 
 /**
@@ -91,31 +74,26 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
  * @returns Promise<boolean> True if permissions are granted
  */
 export const checkSMSPermissions = async (): Promise<boolean> => {
-  try {
-    // Not available in web environment
-    if (!Capacitor.isNativePlatform()) {
-      return false;
+  return new Promise((resolve) => {
+    if (!window.cordova || !window.cordova.plugins || !window.cordova.plugins.sms) {
+      console.warn('[SMS] Cordova SMS plugin not available');
+      resolve(false);
+      return;
     }
+
+    const smsPlugin = window.cordova.plugins.sms;
     
-    // Check if Cordova SMS plugin is available
-    if (!window.cordova?.plugins?.sms) {
-      return false;
-    }
-    
-    return new Promise((resolve) => {
-      window.cordova!.plugins.sms!.hasPermission(
-        (hasPermission) => {
-          resolve(hasPermission);
-        },
-        () => {
-          resolve(false);
-        }
-      );
-    });
-  } catch (error) {
-    console.error('[SMS] Error checking SMS permissions:', error);
-    return false;
-  }
+    smsPlugin.hasPermission(
+      (hasPermission: boolean) => {
+        console.log(`[SMS] Has permission: ${hasPermission}`);
+        resolve(hasPermission);
+      },
+      (error: any) => {
+        console.error('[SMS] Error checking permission:', error);
+        resolve(false);
+      }
+    );
+  });
 };
 
 /**
@@ -123,31 +101,26 @@ export const checkSMSPermissions = async (): Promise<boolean> => {
  * @returns Promise<boolean> True if permissions are granted
  */
 export const requestSMSPermissions = async (): Promise<boolean> => {
-  try {
-    // Not available in web environment
-    if (!Capacitor.isNativePlatform()) {
-      return false;
+  return new Promise((resolve) => {
+    if (!window.cordova || !window.cordova.plugins || !window.cordova.plugins.sms) {
+      console.warn('[SMS] Cordova SMS plugin not available');
+      resolve(false);
+      return;
     }
+
+    const smsPlugin = window.cordova.plugins.sms;
     
-    // Check if Cordova SMS plugin is available
-    if (!window.cordova?.plugins?.sms) {
-      return false;
-    }
-    
-    return new Promise((resolve) => {
-      window.cordova!.plugins.sms!.requestPermission(
-        (hasPermission) => {
-          resolve(hasPermission);
-        },
-        () => {
-          resolve(false);
-        }
-      );
-    });
-  } catch (error) {
-    console.error('[SMS] Error requesting SMS permissions:', error);
-    return false;
-  }
+    smsPlugin.requestPermission(
+      (hasPermission: boolean) => {
+        console.log(`[SMS] Permission request result: ${hasPermission}`);
+        resolve(hasPermission);
+      },
+      (error: any) => {
+        console.error('[SMS] Error requesting permission:', error);
+        resolve(false);
+      }
+    );
+  });
 };
 
 /**
@@ -157,14 +130,6 @@ export const requestSMSPermissions = async (): Promise<boolean> => {
  * @returns The SMS link
  */
 export const getSMSLink = (phoneNumber: string, message: string): string => {
-  try {
-    // URL encode the message
-    const encodedMessage = encodeURIComponent(message);
-    
-    // iOS and Android use the same format
-    return `sms:${phoneNumber}${encodedMessage ? `?body=${encodedMessage}` : ''}`;
-  } catch (error) {
-    console.error('[SMS] Error generating SMS link:', error);
-    return `sms:${phoneNumber}`;
-  }
+  const encodedMessage = encodeURIComponent(message);
+  return `sms:${phoneNumber}${message ? `?body=${encodedMessage}` : ''}`;
 };

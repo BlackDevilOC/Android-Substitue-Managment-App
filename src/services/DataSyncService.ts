@@ -1,5 +1,4 @@
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, ReadFileOptions, WriteFileOptions, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 /**
  * DataSyncService
@@ -13,17 +12,16 @@ export class DataSyncService {
   private initialized: boolean = false;
   private readonly dataDirectory = 'data';
 
-  // List of essential data files that should be copied from assets to local storage
+  // Files that are essential for the app to function
   private readonly essentialFiles = [
     'teachers.json',
-    'class_schedules.json',
-    'absent_teachers.json',
-    'timetable_file.csv',
-    'Substitude_file.csv',
-    'period_config.json',
-    'day_schedules.json',
     'schedules.json',
-    'users.json'
+    'teacher_schedules.json',
+    'absent_teachers.json',
+    'sms_history.json',
+    'substitute_logs.json',
+    'Substitude_file.csv',
+    'timetable_file.csv'
   ];
 
   /**
@@ -48,12 +46,12 @@ export class DataSyncService {
     }
 
     try {
-      console.log('[DataSync] Initializing data synchronization service');
+      console.log('[DataSync] Initializing...');
       
-      // Ensure the data directory exists
+      // Ensure data directory exists
       await this.ensureDataDirectory();
       
-      // Copy essential files from assets to local storage
+      // Copy essential files from app assets to data directory
       await this.copyEssentialFiles();
       
       this.initialized = true;
@@ -69,26 +67,22 @@ export class DataSyncService {
    */
   private async ensureDataDirectory(): Promise<void> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        console.log('[DataSync] Running in browser, skipping directory creation');
-        return;
-      }
+      // Check if directory exists
+      const dirResult = await Filesystem.readdir({
+        path: this.dataDirectory,
+        directory: Directory.Data
+      });
+      
+      console.log(`[DataSync] Data directory exists with ${dirResult.files.length} files`);
+    } catch (error) {
+      // Directory doesn't exist, create it
+      console.log('[DataSync] Creating data directory');
       
       await Filesystem.mkdir({
         path: this.dataDirectory,
-        directory: Directory.Documents,
+        directory: Directory.Data,
         recursive: true
       });
-      
-      console.log(`[DataSync] Created directory: ${this.dataDirectory}`);
-    } catch (error: any) {
-      // Directory might already exist (error code 12)
-      if (error.message && error.message.includes('exists')) {
-        console.log(`[DataSync] Directory already exists: ${this.dataDirectory}`);
-      } else {
-        console.error(`[DataSync] Error creating directory: ${this.dataDirectory}`, error);
-        throw error;
-      }
     }
   }
 
@@ -96,18 +90,13 @@ export class DataSyncService {
    * Copy essential data files from app assets to local storage
    */
   private async copyEssentialFiles(): Promise<void> {
-    if (!Capacitor.isNativePlatform()) {
-      console.log('[DataSync] Running in browser, skipping file copy');
-      return;
-    }
-
-    console.log('[DataSync] Copying essential files to data directory');
+    console.log('[DataSync] Copying essential files...');
     
     for (const filename of this.essentialFiles) {
       await this.copyFileIfNewer(filename);
     }
     
-    console.log('[DataSync] All essential files copied');
+    console.log('[DataSync] Essential files copied');
   }
 
   /**
@@ -115,23 +104,45 @@ export class DataSyncService {
    */
   private async copyFileIfNewer(filename: string): Promise<void> {
     try {
+      // Check if file exists in data directory
       const exists = await this.fileExists(filename);
-      const destPath = `${this.dataDirectory}/${filename}`;
       
       if (!exists) {
-        console.log(`[DataSync] File doesn't exist, copying: ${filename}`);
+        // If file doesn't exist in data directory, copy it from assets
+        console.log(`[DataSync] File ${filename} not found in data directory, copying from assets`);
         
-        // File doesn't exist in data directory, copy it from assets
-        const content = await this.readFileFromAssets(filename);
-        await this.writeFile(filename, content);
-        
-        console.log(`[DataSync] File copied: ${filename}`);
+        try {
+          // Read file from assets
+          const fileContent = await this.readFileFromAssets(filename);
+          
+          // Write file to data directory
+          await this.writeFile(filename, fileContent);
+          
+          console.log(`[DataSync] File ${filename} copied from assets to data directory`);
+        } catch (error) {
+          console.warn(`[DataSync] Could not copy ${filename} from assets: ${error}`);
+          
+          // Create empty file if asset doesn't exist
+          if (filename.endsWith('.json')) {
+            if (filename.includes('teachers')) {
+              await this.writeFile(filename, '[]');
+            } else if (filename.includes('schedules')) {
+              await this.writeFile(filename, '{}');
+            } else {
+              await this.writeFile(filename, '[]');
+            }
+            console.log(`[DataSync] Created empty ${filename}`);
+          } else if (filename.endsWith('.csv')) {
+            await this.writeFile(filename, '');
+            console.log(`[DataSync] Created empty ${filename}`);
+          }
+        }
       } else {
-        console.log(`[DataSync] File already exists: ${filename}`);
-        // TODO: Compare file dates and copy if the asset is newer
+        console.log(`[DataSync] File ${filename} already exists in data directory`);
       }
     } catch (error) {
-      console.error(`[DataSync] Error copying file: ${filename}`, error);
+      console.error(`[DataSync] Error copying file ${filename}:`, error);
+      throw error;
     }
   }
 
@@ -141,13 +152,13 @@ export class DataSyncService {
   private async readFileFromAssets(filename: string): Promise<string> {
     try {
       const result = await Filesystem.readFile({
-        path: filename,
-        directory: Directory.Assets
+        path: `public/${filename}`,
+        directory: Directory.Data
       });
       
-      return result.data as string;
+      return result.data;
     } catch (error) {
-      console.error(`[DataSync] Error reading file from assets: ${filename}`, error);
+      console.error(`[DataSync] Error reading file ${filename} from assets:`, error);
       throw error;
     }
   }
@@ -157,21 +168,17 @@ export class DataSyncService {
    */
   public async readFile(filename: string): Promise<string> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        // In browser, try to fetch the file from the public directory
-        const response = await fetch(`/data/${filename}`);
-        return await response.text();
-      }
+      const filePath = `${this.dataDirectory}/${filename}`;
       
       const result = await Filesystem.readFile({
-        path: `${this.dataDirectory}/${filename}`,
-        directory: Directory.Documents,
+        path: filePath,
+        directory: Directory.Data,
         encoding: 'utf8'
       });
       
-      return result.data as string;
+      return result.data;
     } catch (error) {
-      console.error(`[DataSync] Error reading file: ${filename}`, error);
+      console.error(`[DataSync] Error reading file ${filename}:`, error);
       throw error;
     }
   }
@@ -181,21 +188,16 @@ export class DataSyncService {
    */
   public async writeFile(filename: string, data: string): Promise<void> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        console.log(`[DataSync] Running in browser, can't write file: ${filename}`);
-        return;
-      }
+      const filePath = `${this.dataDirectory}/${filename}`;
       
       await Filesystem.writeFile({
-        path: `${this.dataDirectory}/${filename}`,
+        path: filePath,
         data: data,
-        directory: Directory.Documents,
+        directory: Directory.Data,
         encoding: 'utf8'
       });
-      
-      console.log(`[DataSync] File written: ${filename}`);
     } catch (error) {
-      console.error(`[DataSync] Error writing file: ${filename}`, error);
+      console.error(`[DataSync] Error writing file ${filename}:`, error);
       throw error;
     }
   }
@@ -205,19 +207,15 @@ export class DataSyncService {
    */
   public async fileExists(filename: string): Promise<boolean> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        // In browser, we can't reliably check if files exist
-        return false;
-      }
+      const filePath = `${this.dataDirectory}/${filename}`;
       
       await Filesystem.stat({
-        path: `${this.dataDirectory}/${filename}`,
-        directory: Directory.Documents
+        path: filePath,
+        directory: Directory.Data
       });
       
       return true;
     } catch (error) {
-      // File doesn't exist
       return false;
     }
   }
@@ -227,19 +225,14 @@ export class DataSyncService {
    */
   public async listFiles(): Promise<string[]> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        console.log('[DataSync] Running in browser, can\'t list files');
-        return [];
-      }
-      
       const result = await Filesystem.readdir({
         path: this.dataDirectory,
-        directory: Directory.Documents
+        directory: Directory.Data
       });
       
       return result.files.map(file => file.name);
     } catch (error) {
-      console.error('[DataSync] Error listing files', error);
+      console.error('[DataSync] Error listing files:', error);
       return [];
     }
   }
