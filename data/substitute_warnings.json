@@ -1,0 +1,16 @@
+{
+  "2025-03-07": [
+    "Error in autoAssignSubstitutes: TypeError: csv is not a function"
+  ],
+  "2025-03-08": [
+    "Grade conflict: Sir Bakir Shah (grade 10) assigned to 6A",
+    "Grade conflict: Sir Irshad Qureshi (grade 10) assigned to 7A",
+    "Grade conflict: Sir Romanulabdin (grade 10) assigned to 7A",
+    "Grade conflict: Sir Aman Arif (grade 10) assigned to 7A",
+    "Grade conflict: Sir Shafique Ahmed (grade 10) assigned to 7A"
+  ],
+  "2025-03-11": [
+    "Conflict: 1 substitutes are now absent"
+  ],
+  "2025-03-14": []
+}

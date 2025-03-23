@@ -1,0 +1,56 @@
+[
+  {
+    "teacherId": "3",
+    "teacherName": "Sir Irshad Qureshi",
+    "message": "Dear Sir Irshad Qureshi, you have been assigned to cover 10B for Sir Bakir Shah. Please confirm your availability.",
+    "status": "pending",
+    "method": "api",
+    "id": "zknfxpdp0",
+    "sentAt": "2025-03-14T14:32:15.041Z"
+  },
+  {
+    "teacherId": "3",
+    "teacherName": "Sir Irshad Qureshi",
+    "message": "Dear Sir Irshad Qureshi, you have been assigned to cover 10B for Sir Bakir Shah. Please confirm your availability.",
+    "status": "failed",
+    "method": "api",
+    "id": "s9iwm91y0",
+    "sentAt": "2025-03-14T14:34:59.270Z"
+  },
+  {
+    "id": "sms-1742021625177-1z4uj1k",
+    "sentAt": "2025-03-15T06:53:45.177Z",
+    "teacherId": "2",
+    "teacherName": "Sir Mushtaque Ahmed",
+    "message": "Dear {teacher}, you have been assigned to cover {class} for {original_teacher}. Please confirm your availability.",
+    "status": "pending",
+    "method": "api"
+  },
+  {
+    "id": "sms-1742021625179-yz3ljxd",
+    "sentAt": "2025-03-15T06:53:45.179Z",
+    "teacherId": "+923133469238",
+    "teacherName": "+923133469238",
+    "message": "Dear {teacher}, you have been assigned to cover {class} for {original_teacher}. Please confirm your availability.",
+    "status": "pending",
+    "method": "native"
+  },
+  {
+    "id": "sms-1742021977084-89jyqpz",
+    "sentAt": "2025-03-15T06:59:37.084Z",
+    "teacherId": "2",
+    "teacherName": "Sir Mushtaque Ahmed",
+    "message": "Important: Your teaching schedule has been updated. You will be covering {class} during period {period}.",
+    "status": "pending",
+    "method": "api"
+  },
+  {
+    "id": "sms-1742021977085-15tyrhq",
+    "sentAt": "2025-03-15T06:59:37.085Z",
+    "teacherId": "+923133469238",
+    "teacherName": "+923133469238",
+    "message": "Important: Your teaching schedule has been updated. You will be covering {class} during period {period}.",
+    "status": "pending",
+    "method": "native"
+  }
+]
