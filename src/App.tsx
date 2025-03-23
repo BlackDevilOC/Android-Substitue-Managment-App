@@ -4,7 +4,7 @@ import { Route, Router } from 'wouter';
 import { Capacitor } from '@capacitor/core';
 import { AuthProvider } from './hooks/use-auth';
 import { MobileServerProvider } from './components/MobileServerProvider';
-import { MascotProvider } from './components/MascotProvider';
+
 import { queryClient } from './lib/queryClient';
 
 // Import pages 
@@ -125,13 +125,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <MobileServerProvider>
-          <MascotProvider>
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-              <NetworkStatus />
-              <ServerStatus />
-              <Router />
-            </div>
-          </MascotProvider>
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            <NetworkStatus />
+            <ServerStatus />
+            <Router />
+          </div>
         </MobileServerProvider>
       </AuthProvider>
     </QueryClientProvider>
