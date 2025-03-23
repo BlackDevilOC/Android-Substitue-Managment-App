@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { mobileServer } from '../services/MobileServerService';
+import { dataSync } from '../services/DataSyncService';
 import { Capacitor } from '@capacitor/core';
 
 interface MobileServerContextType {
@@ -27,31 +28,39 @@ interface MobileServerProviderProps {
 export const MobileServerProvider: React.FC<MobileServerProviderProps> = ({ children }) => {
   const [isServerRunning, setIsServerRunning] = useState<boolean>(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [isDataSyncInitialized, setIsDataSyncInitialized] = useState<boolean>(false);
 
-  // Start the server when the app loads (on native platforms only)
+  // Initialize data sync service
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      startServer();
-    }
+    const initializeDataSync = async () => {
+      try {
+        await dataSync.initialize();
+        setIsDataSyncInitialized(true);
+        console.log('[MobileServerProvider] DataSync service initialized');
+      } catch (error) {
+        console.error('[MobileServerProvider] Failed to initialize DataSync:', error);
+        setServerError('Failed to initialize data sync service');
+      }
+    };
+
+    initializeDataSync();
   }, []);
 
-  // Check server status periodically
+  // Start server automatically when data sync is initialized
   useEffect(() => {
-    const interval = setInterval(() => {
+    if (isDataSyncInitialized && Capacitor.isNativePlatform()) {
+      startServer();
+    }
+  }, [isDataSyncInitialized]);
+
+  // Start the server
+  const startServer = async () => {
+    try {
+      await mobileServer.start();
       const status = mobileServer.getStatus();
       setIsServerRunning(status.isRunning);
       setServerError(status.error);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const startServer = async () => {
-    try {
-      console.log('[MobileServerProvider] Starting server...');
-      await mobileServer.start();
-      setIsServerRunning(true);
-      setServerError(null);
+      console.log('[MobileServerProvider] Server started');
     } catch (error) {
       console.error('[MobileServerProvider] Failed to start server:', error);
       setIsServerRunning(false);
@@ -59,28 +68,31 @@ export const MobileServerProvider: React.FC<MobileServerProviderProps> = ({ chil
     }
   };
 
+  // Stop the server
   const stopServer = () => {
     try {
-      console.log('[MobileServerProvider] Stopping server...');
       mobileServer.stop();
       setIsServerRunning(false);
+      setServerError(null);
+      console.log('[MobileServerProvider] Server stopped');
     } catch (error) {
       console.error('[MobileServerProvider] Failed to stop server:', error);
       setServerError(error instanceof Error ? error.message : 'Unknown error stopping server');
     }
   };
 
+  // Process CSV file
   const processCSV = async (fileContent: string, isSubstitute: boolean) => {
     try {
-      console.log('[MobileServerProvider] Processing CSV file...');
       await mobileServer.processUploadedCSV(fileContent, isSubstitute);
+      console.log('[MobileServerProvider] CSV processed successfully');
     } catch (error) {
       console.error('[MobileServerProvider] Failed to process CSV:', error);
-      setServerError(error instanceof Error ? error.message : 'Unknown error processing CSV');
       throw error;
     }
   };
 
+  // Provide context value
   const value: MobileServerContextType = {
     isServerRunning,
     startServer,

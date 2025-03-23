@@ -1,5 +1,5 @@
-import { Capacitor } from '@capacitor/core';
 import { QueryClient } from '@tanstack/react-query';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Get the appropriate API URL based on the environment
@@ -8,19 +8,20 @@ import { QueryClient } from '@tanstack/react-query';
  */
 function getApiUrl(url: string): string {
   if (Capacitor.isNativePlatform()) {
-    // On mobile, redirect to local server
-    const localServerUrl = 'http://localhost:5000';
+    // On mobile devices, use the local server running on localhost
+    const localServerPort = 5000;
+    const baseUrl = `http://localhost:${localServerPort}`;
     
-    // If URL already starts with http, don't modify it (likely an external API)
+    // If the URL already includes the protocol, return it as is
     if (url.startsWith('http')) {
       return url;
     }
     
-    // Add local server URL as prefix
-    return `${localServerUrl}${url}`;
+    // Otherwise, prepend the local server URL
+    return `${baseUrl}${url}`;
   }
   
-  // In web, use relative URLs
+  // On web, use relative URLs
   return url;
 }
 
@@ -29,19 +30,19 @@ function getApiUrl(url: string): string {
  */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    let errorMessage = `API Error: ${res.status} ${res.statusText}`;
+    let errorMessage = `Request failed with status ${res.status}`;
     
     try {
-      const data = await res.json();
-      if (data.error) {
-        errorMessage = data.error;
+      const errorData = await res.json();
+      if (errorData.error) {
+        errorMessage = errorData.error;
       }
     } catch (e) {
-      // Unable to parse JSON error message, use default
+      // If we can't parse the error response as JSON, just use the status message
+      console.error('Error parsing error response', e);
     }
     
-    const error = new Error(errorMessage);
-    throw error;
+    throw new Error(errorMessage);
   }
 }
 
@@ -50,36 +51,40 @@ async function throwIfResNotOk(res: Response) {
  */
 export async function apiRequest(
   url: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
+  data?: any,
   options: RequestInit = {}
-): Promise<any> {
+) {
   try {
     const apiUrl = getApiUrl(url);
     
-    // Set default headers if not provided
     const defaultOptions: RequestInit = {
-      credentials: 'include',
+      method,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      credentials: 'include',
+      ...options,
     };
     
-    const mergedOptions = { ...defaultOptions, ...options };
+    if (data) {
+      defaultOptions.body = JSON.stringify(data);
+    }
     
-    console.log(`[API] ${mergedOptions.method || 'GET'} ${apiUrl}`);
+    console.log(`[API] ${method} request to ${apiUrl}`);
     
-    const res = await fetch(apiUrl, mergedOptions);
-    
+    const res = await fetch(apiUrl, defaultOptions);
     await throwIfResNotOk(res);
     
-    // For 204 No Content, return empty object
-    if (res.status === 204) {
-      return {};
+    // For DELETE requests or empty responses, return { success: true }
+    if (method === 'DELETE' || res.headers.get('content-length') === '0') {
+      return { success: true };
     }
     
     return await res.json();
   } catch (error) {
-    console.error(`[API] Request failed for ${url}:`, error);
+    console.error(`[API] Error in ${method} request to ${url}:`, error);
     throw error;
   }
 }
@@ -91,38 +96,31 @@ type UnauthorizedBehavior = "returnNull" | "throw";
  */
 export const getQueryFn = <T>(options: {
   on401: UnauthorizedBehavior;
-}) => {
-  return async ({ queryKey }: { queryKey: string[] }): Promise<T | null> => {
-    try {
-      const [url, ...params] = queryKey;
-      
-      // Handle query params if provided
-      let finalUrl = url;
-      if (params.length > 0 && typeof params[0] === 'object') {
-        const queryParams = new URLSearchParams(params[0] as Record<string, string>).toString();
-        finalUrl = `${url}?${queryParams}`;
+}) => async ({ queryKey }: { queryKey: string[] }): Promise<T | null> => {
+  const url = queryKey[0];
+  
+  try {
+    const data = await apiRequest(url);
+    return data as T;
+  } catch (error) {
+    if (error instanceof Response && error.status === 401) {
+      if (options.on401 === "returnNull") {
+        return null;
       }
-      
-      return await apiRequest(finalUrl);
-    } catch (error) {
-      // Handle 401 Unauthorized based on options
-      if (error instanceof Response && error.status === 401) {
-        if (options.on401 === "returnNull") {
-          return null;
-        }
-      }
-      
-      throw error;
     }
-  };
+    
+    throw error;
+  }
 };
 
+// Create a query client with default options
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
+      cacheTime: 1000 * 60 * 30, // 30 minutes
       retry: 1,
-      queryFn: getQueryFn<unknown>({ on401: "returnNull" }),
+      queryFn: getQueryFn({ on401: "throw" }),
     },
   },
 });

@@ -1,13 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import App from './App';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
-import { registerPlugins } from './capacitor-plugins';
-import App from './App';
-import './index.css';
+import { AuthProvider } from './hooks/use-auth';
 import { MobileServerProvider } from './components/MobileServerProvider';
-import { Capacitor } from '@capacitor/core';
-import { dataSync } from './services/DataSyncService';
+import { registerPlugins } from './capacitor-plugins';
 import { SMSService } from './services/SMSService';
 
 /**
@@ -15,41 +13,33 @@ import { SMSService } from './services/SMSService';
  */
 async function initializeApp() {
   try {
-    console.log('[Main] Initializing application...');
-    console.log('[Main] Platform:', Capacitor.getPlatform());
+    // Register Capacitor plugins for mobile platforms
+    await registerPlugins();
     
-    // Register Capacitor plugins (status bar, splash screen, etc.)
-    registerPlugins();
+    // Process any pending SMS messages in the queue
+    await SMSService.processQueue();
     
-    // Initialize mobile services (on native platforms only)
-    if (Capacitor.isNativePlatform()) {
-      console.log('[Main] Initializing mobile services...');
-      
-      try {
-        // Initialize data sync service
-        await dataSync.initialize();
-        
-        // Process SMS queue (try to send any pending messages)
-        await SMSService.processQueue();
-      } catch (error) {
-        console.error('[Main] Error initializing mobile services:', error);
-      }
-    }
+    // Set up processing of SMS queue every 5 minutes
+    setInterval(async () => {
+      await SMSService.processQueue();
+    }, 5 * 60 * 1000);
     
-    // Render the application
-    ReactDOM.createRoot(document.getElementById('root')!).render(
+    // Render the React application
+    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
         <QueryClientProvider client={queryClient}>
-          <MobileServerProvider>
-            <App />
-          </MobileServerProvider>
+          <AuthProvider>
+            <MobileServerProvider>
+              <App />
+            </MobileServerProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </React.StrictMode>
     );
     
-    console.log('[Main] Application initialized');
+    console.log('[App] Application initialized successfully');
   } catch (error) {
-    console.error('[Main] Error initializing application:', error);
+    console.error('[App] Error initializing application:', error);
   }
 }
 
