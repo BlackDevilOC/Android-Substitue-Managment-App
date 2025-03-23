@@ -1,0 +1,30 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "John Smith",
+      "email": "john@example.com",
+      "role": "admin"
+    },
+    {
+      "id": 2,
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "role": "user"
+    },
+    {
+      "id": 3,
+      "name": "Robert Johnson",
+      "email": "robert@example.com",
+      "role": "user"
+    },
+    {
+      "id": 4,
+      "name": "Emily Williams",
+      "email": "emily@example.com",
+      "role": "manager"
+    }
+  ],
+  "total": 4,
+  "page": 1
+}

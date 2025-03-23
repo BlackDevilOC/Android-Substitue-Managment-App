@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { setupAuth } from "./auth";
 
 const app = express();
 app.use(express.json());
@@ -38,10 +37,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Setup authentication
-  setupAuth(app);
-  
-  // Register other routes
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -62,14 +57,14 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
   const port = 5000;
-  app.listen(port, "0.0.0.0", async () => {
-    console.log(`[express] serving on port ${port}`);
-    // Import and call the loadInitialData function from csv-handler
-    const { loadInitialData } = await import('./csv-handler');
-    console.log("[loadInitialData] Loading data from CSV files...");
-    await loadInitialData();
-    console.log("[loadInitialData] Data loading complete.");
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
   });
 })();
