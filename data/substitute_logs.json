@@ -1,47 +1,430 @@
 {
-  "2025-03-23": [
+  "2025-03-25": [
     {
-      "timestamp": "2025-03-23T04:28:03.555Z",
+      "timestamp": "2025-03-25T06:21:36.469Z",
       "action": "ProcessStart",
-      "details": "Initializing substitute assignment system",
+      "details": "Starting auto-assignment process",
       "status": "info",
       "data": {
-        "version": "2.1-diagnostic"
-      },
-      "durationMs": 0
-    },
-    {
-      "timestamp": "2025-03-23T04:28:03.555Z",
-      "action": "DataLoading",
-      "details": "Using 1 provided absent teachers",
-      "status": "info",
-      "durationMs": 0
-    },
-    {
-      "timestamp": "2025-03-23T04:28:03.555Z",
-      "action": "DataLoading",
-      "details": "Loading source files",
-      "status": "info",
-      "data": {
-        "files": [
-          "/home/runner/workspace/data/total_teacher.json",
-          "/home/runner/workspace/data/teacher_schedules.json",
-          "/home/runner/workspace/data/assigned_teacher.json",
-          "/home/runner/workspace/data/timetable_file.csv"
+        "date": "2025-03-25",
+        "teachers": [
+          "Sir Mushtaque Ahmed"
         ]
       },
       "durationMs": 0
     },
     {
-      "timestamp": "2025-03-23T04:28:03.648Z",
-      "action": "ProcessError",
-      "details": "Error in autoAssignSubstitutes: Error: Invalid Record Length: expect 17, got 18 on line 20",
-      "status": "error",
+      "timestamp": "2025-03-25T06:21:36.469Z",
+      "action": "DayCalculation",
+      "details": "Calculated day: tuesday",
+      "status": "info",
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.472Z",
+      "action": "DataLoading",
+      "details": "Loaded required data",
+      "status": "info",
       "data": {
-        "errorMessage": "Invalid Record Length: expect 17, got 18 on line 20",
-        "stack": "Error: Invalid Record Length: expect 17, got 18 on line 20\n    at Object.__onRecord (file:///home/runner/workspace/node_modules/csv-parse/lib/api/index.js:493:15)\n    at Object.parse (file:///home/runner/workspace/node_modules/csv-parse/lib/api/index.js:333:40)\n    at Parser._transform (file:///home/runner/workspace/node_modules/csv-parse/lib/index.js:32:26)\n    at Transform._write (node:internal/streams/transform:171:8)\n    at writeOrBuffer (node:internal/streams/writable:572:12)\n    at _write (node:internal/streams/writable:501:10)\n    at Writable.write (node:internal/streams/writable:510:10)\n    at ReadStream.ondata (node:internal/streams/readable:1009:22)\n    at ReadStream.emit (node:events:518:28)\n    at addChunk (node:internal/streams/readable:561:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)\n    at Readable.push (node:internal/streams/readable:392:5)\n    at node:internal/fs/streams:289:14\n    at FSReqCallback.wrapper [as oncomplete] (node:fs:682:5)"
+        "teachersCount": 35,
+        "substitutesCount": 28,
+        "existingAssignments": 0
       },
-      "durationMs": 93
+      "durationMs": 3
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.472Z",
+      "action": "TeacherProcessing",
+      "details": "Processing teacher: Sir Mushtaque Ahmed",
+      "status": "info",
+      "durationMs": 3
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.472Z",
+      "action": "NameProcessing",
+      "details": "Starting name normalization",
+      "status": "info",
+      "data": {
+        "originalName": "sir mushtaque ahmed",
+        "normalizedName": "sir mushtaque ahmed"
+      },
+      "durationMs": 3
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.472Z",
+      "action": "ClassMapLookup",
+      "details": "Checking teacher classes map",
+      "status": "info",
+      "data": {
+        "teacherName": "sir mushtaque ahmed",
+        "entriesFound": 17
+      },
+      "durationMs": 3
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.472Z",
+      "action": "ClassMapProcessing",
+      "details": "Processed class map periods",
+      "status": "info",
+      "data": {
+        "rawCount": 17,
+        "filteredCount": 3,
+        "periods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "classMap"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "classMap"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "classMap"
+          }
+        ]
+      },
+      "durationMs": 3
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "ScheduleAnalysis",
+      "details": "Processed schedule periods",
+      "status": "info",
+      "data": {
+        "rawEntries": 17,
+        "validCount": 3,
+        "periods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "schedule"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "schedule"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "schedule"
+          }
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "VariationCheck",
+      "details": "Checking name variations",
+      "status": "info",
+      "data": {
+        "variations": [
+          "Sir Mushtaque Ahmed",
+          "sir mushtaque ahmed",
+          "Sir mushtaque ahmed"
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "VariationResults",
+      "details": "Found periods from variations",
+      "status": "info",
+      "data": {
+        "count": 9,
+        "periods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:Sir mushtaque ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:Sir mushtaque ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:Sir mushtaque ahmed"
+          }
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "SpecialCaseLookup",
+      "details": "Applied special case for Sir Mushtaque Ahmed on Tuesday",
+      "status": "info",
+      "data": {
+        "periods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "special:timetable"
+          }
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "PeriodValidation",
+      "details": "Final period validation",
+      "status": "info",
+      "data": {
+        "totalCandidates": 18,
+        "validPeriods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "classMap"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "classMap"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "classMap"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "schedule"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "schedule"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "schedule"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:Sir Mushtaque Ahmed"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:sir mushtaque ahmed"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "variation:Sir mushtaque ahmed"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "variation:Sir mushtaque ahmed"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "variation:Sir mushtaque ahmed"
+          },
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "special:timetable"
+          }
+        ],
+        "invalidPeriods": []
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "Deduplication",
+      "details": "Removed duplicate periods",
+      "status": "info",
+      "data": {
+        "beforeDedupe": 18,
+        "afterDedupe": 3,
+        "resultPeriods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "special:timetable"
+          }
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.473Z",
+      "action": "PeriodsFound",
+      "details": "Found 3 periods for Sir Mushtaque Ahmed",
+      "status": "info",
+      "data": {
+        "periods": [
+          {
+            "period": 1,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 2,
+            "className": "10B",
+            "source": "special:timetable"
+          },
+          {
+            "period": 8,
+            "className": "10A",
+            "source": "special:timetable"
+          }
+        ]
+      },
+      "durationMs": 4
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.474Z",
+      "action": "AssignmentCreated",
+      "details": "Created assignment for period 1",
+      "status": "info",
+      "data": {
+        "assignment": {
+          "originalTeacher": "Sir Mushtaque Ahmed",
+          "period": 1,
+          "className": "10B",
+          "substitute": "Sir Waqar Ali",
+          "substitutePhone": "+923113588606"
+        }
+      },
+      "durationMs": 5
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.474Z",
+      "action": "AssignmentCreated",
+      "details": "Created assignment for period 2",
+      "status": "info",
+      "data": {
+        "assignment": {
+          "originalTeacher": "Sir Mushtaque Ahmed",
+          "period": 2,
+          "className": "10B",
+          "substitute": "Sir Faisal Ali",
+          "substitutePhone": "+923473093995"
+        }
+      },
+      "durationMs": 5
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.474Z",
+      "action": "AssignmentCreated",
+      "details": "Created assignment for period 8",
+      "status": "info",
+      "data": {
+        "assignment": {
+          "originalTeacher": "Sir Mushtaque Ahmed",
+          "period": 8,
+          "className": "10A",
+          "substitute": "Sir Irshad Qureshi",
+          "substitutePhone": "+923123131179"
+        }
+      },
+      "durationMs": 5
+    },
+    {
+      "timestamp": "2025-03-25T06:21:36.477Z",
+      "action": "DataSave",
+      "details": "Saved 3 assignments to file",
+      "status": "info",
+      "durationMs": 8
     }
   ]
 }

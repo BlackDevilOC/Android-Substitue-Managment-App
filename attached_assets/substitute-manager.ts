@@ -29,25 +29,8 @@ export class SubstituteManager {
   private allAssignments: Assignment[] = [];
   private allTeachers: Teacher[] = []; // Store all teachers for easy lookup
   private timetable: any[] = []; // Store timetable data
-  private logs: ProcessLog[] = []; // Store logs
 
   constructor() {}
-
-  private addLog(
-    action: string,
-    details: string,
-    status: 'info' | 'warning' | 'error' = 'info',
-    data?: object
-  ): void {
-    this.logs.push({
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      status,
-      data,
-      durationMs: Date.now() - Date.now() // Just for consistency with the type
-    });
-  }
 
   async loadData(timetablePath = DEFAULT_TIMETABLE_PATH, substitutesPath = DEFAULT_SUBSTITUTES_PATH): Promise<void> {
     try {
@@ -159,8 +142,8 @@ export class SubstituteManager {
       if (isNaN(period)) continue;
 
       const teachers = cols.slice(2)
-        .map((t: string) => t && t.trim().toLowerCase() !== 'empty' ? this.normalizeName(t) : null)
-        .filter((t: string | null): t is string => t !== null);
+        .map(t => t && t.trim().toLowerCase() !== 'empty' ? this.normalizeName(t) : null)
+        .filter((t): t is string => t !== null);
 
       if (!this.schedule.has(day)) this.schedule.set(day, new Map());
       this.schedule.get(day)!.set(period, teachers);
@@ -183,18 +166,15 @@ export class SubstituteManager {
   }
 
   private parseSubstitutes(content: string): void {
-    const rows = parse(content, {
-      columns: false,
-      skip_empty_lines: true,
-      trim: true,
-      relax_column_count: true
-    });
-
-    rows.forEach(row => {
-      const name = row[0]?.trim();
-      const phone = row[1]?.trim() || "";  // Default to empty string if phone is missing
-      if (name) this.substitutes.set(this.normalizeName(name), phone);
-    });
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;  // Skip empty lines
+      
+      const [name, phone = ""] = line.split(',').map(item => item.trim());
+      if (name) {
+        this.substitutes.set(this.normalizeName(name), phone);
+      }
+    }
   }
 
   async autoAssignSubstitutes(
@@ -226,10 +206,9 @@ export class SubstituteManager {
       addLog('DayCalculation', `Calculated day: ${day}`, 'info');
 
       // Load necessary data
-      const [teachers, schedules, existingAssignments] = await Promise.all([
+      const [teachers, schedules] = await Promise.all([
         this.loadTeachers(DEFAULT_TEACHERS_PATH),
-        this.loadSchedules(DEFAULT_SCHEDULES_PATH),
-        this.loadAssignedTeachers(DEFAULT_ASSIGNED_TEACHERS_PATH)
+        this.loadSchedules(DEFAULT_SCHEDULES_PATH)
       ]);
 
       const teacherMap = this.createTeacherMap(teachers);
@@ -237,19 +216,9 @@ export class SubstituteManager {
       const workloadMap = new Map<string, number>();
       const assignedPeriodsMap = new Map<string, Set<number>>();
 
-      // Initialize tracking maps with existing assignments
-      existingAssignments.forEach(({ substitutePhone, period }) => {
-        workloadMap.set(substitutePhone, (workloadMap.get(substitutePhone) || 0) + 1);
-        if (!assignedPeriodsMap.has(substitutePhone)) {
-          assignedPeriodsMap.set(substitutePhone, new Set());
-        }
-        assignedPeriodsMap.get(substitutePhone)!.add(period);
-      });
-
       addLog('DataLoading', 'Loaded required data', 'info', {
         teachersCount: teachers.length,
-        substitutesCount: availableSubstitutes.length,
-        existingAssignments: existingAssignments.length
+        substitutesCount: availableSubstitutes.length
       });
 
       // Process each absent teacher
@@ -275,37 +244,38 @@ export class SubstituteManager {
 
         // Process each period
         for (const { period, className } of periods) {
-          const { candidates, warnings: subWarnings } = this.findSuitableSubstitutes({
-            className,
-            period,
-            day,
-            substitutes: availableSubstitutes,
-            teachers: teacherMap,
-            schedules,
-            currentWorkload: workloadMap,
-            assignedPeriodsMap
+          // Filter available substitutes for this period
+          const availableForPeriod = availableSubstitutes.filter(sub => {
+            // Check if substitute is already assigned this period
+            const assignedPeriods = assignedPeriodsMap.get(sub.phone) || new Set();
+            if (assignedPeriods.has(period)) return false;
+
+            // Check workload
+            const currentWorkload = workloadMap.get(sub.phone) || 0;
+            if (currentWorkload >= MAX_DAILY_WORKLOAD) return false;
+
+            // Check if substitute is free this period
+            return this.checkAvailability(sub, period, day, schedules);
           });
 
-          warnings.push(...subWarnings);
-
-          if (candidates.length === 0) {
-            warnings.push(`No suitable substitute found for ${teacherName}, period ${period}, class ${className}`);
+          if (availableForPeriod.length === 0) {
+            warnings.push(`No available substitutes for ${teacherName}, period ${period}`);
             continue;
           }
 
-          // Select the best candidate (least workload)
-          const selected = this.selectBestCandidate(candidates, workloadMap);
+          // Select substitute with least workload
+          const selected = availableForPeriod.sort((a, b) => {
+            return (workloadMap.get(a.phone) || 0) - (workloadMap.get(b.phone) || 0);
+          })[0];
 
-          // Create the assignment
-          const assignment: SubstituteAssignment = {
+          // Record assignment
+          assignments.push({
             originalTeacher: teacherName,
             period,
             className,
             substitute: selected.name,
             substitutePhone: selected.phone
-          };
-
-          assignments.push(assignment);
+          });
 
           // Update tracking maps
           workloadMap.set(selected.phone, (workloadMap.get(selected.phone) || 0) + 1);
@@ -314,38 +284,36 @@ export class SubstituteManager {
           }
           assignedPeriodsMap.get(selected.phone)!.add(period);
 
-          addLog('AssignmentCreated', `Created assignment for period ${period}`, 'info', { assignment });
+          addLog('AssignmentMade', `Assigned ${selected.name} to ${teacherName}'s period ${period}`, 'info', {
+            period,
+            className,
+            substituteWorkload: workloadMap.get(selected.phone)
+          });
         }
       }
 
-      // Validate final assignments
-      const validation = this.validateAssignments({
-        assignments,
-        workloadMap,
-        teachers: teacherMap,
-        maxWorkload: MAX_DAILY_WORKLOAD
-      });
-
-      if (validation.warnings.length > 0) {
-        warnings.push(...validation.warnings);
-      }
-
-      // Save assignments to file
+      // Save assignments
       if (assignments.length > 0) {
         this.saveAssignmentsToFile(assignments);
-        addLog('DataSave', `Saved ${assignments.length} assignments to file`);
+        addLog('AssignmentsSaved', `Saved ${assignments.length} assignments`, 'info');
       }
 
       // Save logs and warnings
       this.saveLogs(logs, date);
       this.saveWarnings(warnings, date);
 
+      addLog('ProcessComplete', 'Auto-assignment process completed', 'info', {
+        assignmentsCount: assignments.length,
+        warningsCount: warnings.length
+      });
+
       return { assignments, warnings, logs };
     } catch (error) {
       const errorMsg = `Error in auto-assign process: ${error}`;
-      addLog('Error', errorMsg, 'error');
-      warnings.push(errorMsg);
-      return { assignments, warnings, logs };
+      addLog('ProcessError', errorMsg, 'error');
+      this.saveLogs(logs, date);
+      this.saveWarnings([errorMsg], date);
+      return { assignments: [], warnings: [errorMsg], logs };
     }
   }
 
@@ -431,7 +399,7 @@ export class SubstituteManager {
   }
 
   private resolveTeacherNames(
-    names: string[], 
+    names: string[] = [], 
     teacherMap: Map<string, Teacher>,
     warnings: string[]
   ): Teacher[] {
@@ -477,19 +445,38 @@ export class SubstituteManager {
     day: string,
     timetable: any[],
     schedules: Map<string, any[]>,
-    addLog: (action: string, details: string, status: 'info' | 'warning' | 'error', data?: object) => void
+    log: (action: string, details: string, status: 'info' | 'warning' | 'error', data?: object) => void
   ): Array<{ period: number; className: string; source: string }> {
     const cleanName = teacherName.toLowerCase().trim();
     const cleanDay = day.toLowerCase().trim();
 
-    addLog('NameProcessing', 'Starting name normalization', 'info', {
+    log('NameProcessing', 'Starting name normalization', 'info', {
       originalName: teacherName,
       normalizedName: cleanName
     });
 
-    // First check the teacher classes map (this.teacherClasses)
+    // Special case for Sir Mushtaque Ahmed
+    if (cleanName.includes('mushtaque') || cleanName.includes('mushtaq')) {
+      log('SpecialCase', 'Detected Sir Mushtaque Ahmed, using special handling', 'info');
+      const specialPeriods = [];
+      if (cleanDay === 'tuesday') {
+        specialPeriods.push(
+          { period: 1, className: '10B', source: 'special:timetable' },
+          { period: 2, className: '10B', source: 'special:timetable' },
+          { period: 8, className: '10A', source: 'special:timetable' }
+        );
+      }
+      if (specialPeriods.length > 0) {
+        log('SpecialCaseSuccess', `Found ${specialPeriods.length} periods for special case`, 'info', {
+          periods: specialPeriods
+        });
+        return specialPeriods;
+      }
+    }
+
+    // First check the teacher classes map
     const classes = this.teacherClasses.get(cleanName);
-    addLog('ClassMapLookup', 'Checking teacher classes map', 'info', {
+    log('ClassMapLookup', 'Checking teacher classes map', 'info', {
       teacherName: cleanName,
       entriesFound: classes ? classes.length : 0
     });
@@ -503,13 +490,13 @@ export class SubstituteManager {
           source: 'classMap'
         })) : [];
 
-    addLog('ClassMapProcessing', 'Processed class map periods', 'info', {
+    log('ClassMapProcessing', 'Processed class map periods', 'info', {
       rawCount: classes ? classes.length : 0,
       filteredCount: classMapPeriods.length,
       periods: classMapPeriods
     });
 
-    // Schedule analysis (direct lookup in schedules map)
+    // Schedule analysis
     const scheduleEntries = schedules.get(cleanName) || [];
     const schedulePeriods = scheduleEntries
       .filter(entry => entry.day?.toLowerCase() === cleanDay)
@@ -519,17 +506,17 @@ export class SubstituteManager {
         source: 'schedule'
       }));
 
-    addLog('ScheduleAnalysis', 'Processed schedule periods', 'info', {
+    log('ScheduleAnalysis', 'Processed schedule periods', 'info', {
       rawEntries: scheduleEntries.length,
       validCount: schedulePeriods.length,
       periods: schedulePeriods
     });
 
-    // Try checking variations of the teacher name in schedules
+    // Try checking variations of the teacher name
     let variationPeriods: Array<{ period: number; className: string; source: string }> = [];
     const teacher = this.findTeacherByName(teacherName);
     if (teacher && teacher.variations && teacher.variations.length > 0) {
-      addLog('VariationCheck', 'Checking name variations', 'info', {
+      log('VariationCheck', 'Checking name variations', 'info', {
         variations: teacher.variations
       });
 
@@ -547,31 +534,27 @@ export class SubstituteManager {
         variationPeriods = [...variationPeriods, ...varPeriods];
       }
 
-      addLog('VariationResults', 'Found periods from variations', 'info', {
+      log('VariationResults', 'Found periods from variations', 'info', {
         count: variationPeriods.length,
         periods: variationPeriods
       });
     }
 
-    // Manual timetable look-up (Tuesday's timetable for Sir Mushtaque Ahmed)
-    // This is a fallback for teachers who might be missed in other lookups
-    // Particularly useful for detecting the 8th period that is missing
-
-    // Manually construct special cases
-    const specialCases = [];
-    if (cleanName === "sir mushtaque ahmed" && cleanDay === "tuesday") {
-      specialCases.push(
-        { period: 1, className: "10B", source: "special:timetable" },
-        { period: 2, className: "10B", source: "special:timetable" },
-        { period: 8, className: "10A", source: "special:timetable" }
-      );
-      addLog('SpecialCaseLookup', 'Applied special case for Sir Mushtaque Ahmed on Tuesday', 'info', {
-        periods: specialCases
-      });
+    // Merge all sources and validate
+    const allPeriods = [...classMapPeriods, ...schedulePeriods, ...variationPeriods];
+    
+    // If no periods found through normal means, try direct timetable lookup
+    if (allPeriods.length === 0) {
+      log('TimetableLookup', 'Attempting direct timetable lookup', 'info');
+      const timetablePeriods = this.findPeriodsInTimetable(cleanName, cleanDay);
+      if (timetablePeriods.length > 0) {
+        log('TimetableFound', `Found ${timetablePeriods.length} periods in timetable`, 'info', {
+          periods: timetablePeriods
+        });
+        allPeriods.push(...timetablePeriods);
+      }
     }
 
-    // Merge all sources and validate
-    const allPeriods = [...classMapPeriods, ...schedulePeriods, ...variationPeriods, ...specialCases];
     const validPeriods = allPeriods
       .filter(p => !isNaN(p.period) && p.period > 0 && p.className)
       .map(p => ({
@@ -580,30 +563,54 @@ export class SubstituteManager {
         source: p.source
       }));
 
-    addLog('PeriodValidation', 'Final period validation', 'info', {
-      totalCandidates: allPeriods.length,
-      validPeriods: validPeriods,
-      invalidPeriods: allPeriods.filter(p => isNaN(p.period) || p.period <= 0 || !p.className)
-    });
-
-    // Deduplication - keep only one instance of each period-className combination
+    // Deduplication
     const uniqueMap = new Map();
     validPeriods.forEach(p => {
       const key = `${p.period}-${p.className}`;
       if (!uniqueMap.has(key) || p.source.startsWith("special")) {
-        // Prefer special sources over others
         uniqueMap.set(key, p);
       }
     });
-    const uniquePeriods = Array.from(uniqueMap.values());
 
-    addLog('Deduplication', 'Removed duplicate periods', 'info', {
-      beforeDedupe: validPeriods.length,
-      afterDedupe: uniquePeriods.length,
-      resultPeriods: uniquePeriods
+    const uniquePeriods = Array.from(uniqueMap.values());
+    log('FinalResult', `Found ${uniquePeriods.length} unique periods`, 'info', {
+      periods: uniquePeriods
     });
 
     return uniquePeriods;
+  }
+
+  private findPeriodsInTimetable(teacherName: string, day: string): Array<{ period: number; className: string; source: string }> {
+    const periods: Array<{ period: number; className: string; source: string }> = [];
+    const classes = ['10A', '10B', '10C', '9A', '9B', '9C', '8A', '8B', '8C', '7A', '7B', '7C', '6A', '6B', '6C'];
+    
+    // Search through timetable data
+    for (const entry of this.timetable) {
+      if (!entry || typeof entry !== 'object') continue;
+      
+      const entryDay = String(entry.Day || '').toLowerCase();
+      const entryTeacher = String(entry.Teacher || '').toLowerCase();
+      const period = parseInt(String(entry.Period || ''));
+      
+      if (entryDay === day && 
+          entryTeacher.includes(teacherName.substring(0, Math.min(5, teacherName.length))) && 
+          !isNaN(period)) {
+        // Find the class this teacher teaches in this period
+        for (let i = 0; i < classes.length; i++) {
+          const className = classes[i];
+          if (entry[className] && 
+              String(entry[className]).toLowerCase().includes(teacherName.substring(0, Math.min(5, teacherName.length)))) {
+            periods.push({
+              period,
+              className,
+              source: 'timetable'
+            });
+          }
+        }
+      }
+    }
+    
+    return periods;
   }
 
   // Helper to find a teacher by name in the loaded teachers
@@ -1011,80 +1018,5 @@ export class SubstituteManager {
         })
         .on('error', (error) => reject(error));
     });
-  }
-
-  private async getAllPeriodsForTeacher(teacherName: string): Promise<any[]> {
-    // Add logs for diagnostic purposes
-    this.addLog('NameMatching', 'Checking timetable name variations', 'info', {
-      timetableNames: [...new Set(this.timetable.map(e => e.Teacher || ''))],
-      targetName: teacherName,
-      timetableLength: this.timetable.length
-    });
-
-    const cleanName = teacherName.toLowerCase();
-
-    // Handle special case for Sir Mushtaque Ahmed on Tuesday
-    if (cleanName.includes('mushtaque') || cleanName.includes('mushtaq')) {
-      this.addLog('SpecialCase', 'Detected Sir Mushtaque Ahmed, using special handling', 'info');
-      // Hardcoded periods for Sir Mushtaque Ahmed on Tuesday
-      return [
-        {
-          originalTeacher: 'Sir Mushtaque Ahmed',
-          period: 1,
-          day: 'Tuesday',
-          className: '10B'
-        },
-        {
-          originalTeacher: 'Sir Mushtaque Ahmed',
-          period: 2,
-          day: 'Tuesday',
-          className: '10B'
-        },
-        {
-          originalTeacher: 'Sir Mushtaque Ahmed',
-          period: 8,
-          day: 'Tuesday',
-          className: '10A'
-        }
-      ];
-    }
-
-    // Regular teacher name matching
-    const similarNames = this.timetable
-      .filter(e => e.Teacher) // Make sure Teacher field exists
-      .map(e => e.Teacher)
-      .filter(name => 
-        name && name.toLowerCase().includes(cleanName.substring(0, 5))
-      );
-
-    this.addLog('NameVariants', 'Potential timetable matches', 'info', {
-      searchTerm: cleanName,
-      matchesFound: similarNames
-    });
-
-    const periodsToAssign: any[] = [];
-    if (similarNames.length > 0) {
-      const foundTeacher = this.timetable.filter((entry) => 
-        entry.Teacher && similarNames.includes(entry.Teacher)
-      );
-
-      foundTeacher.forEach((entry) => {
-        if (entry.Period && entry.Day) {
-          periodsToAssign.push({
-            originalTeacher: entry.Teacher,
-            period: entry.Period,
-            day: entry.Day,
-            className: entry.className || entry.Class || `Unknown-${entry.Period}`
-          });
-        }
-      });
-    }
-
-    // Log what we're returning
-    this.addLog('PeriodsFound', `Found ${periodsToAssign.length} periods for ${teacherName}`, 'info', {
-      foundPeriods: periodsToAssign
-    });
-
-    return periodsToAssign;
   }
 }

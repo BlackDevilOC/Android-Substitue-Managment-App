@@ -1,0 +1,47 @@
+{
+  "2025-03-07": [
+    {
+      "timestamp": "2025-03-07T22:08:10.377Z",
+      "action": "ProcessStart",
+      "details": "Initializing substitute assignment system",
+      "status": "info",
+      "data": {
+        "version": "2.1-diagnostic"
+      },
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-07T22:08:10.377Z",
+      "action": "DataLoading",
+      "details": "Using 1 provided absent teachers",
+      "status": "info",
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-07T22:08:10.377Z",
+      "action": "DataLoading",
+      "details": "Loading source files",
+      "status": "info",
+      "data": {
+        "files": [
+          "/home/runner/workspace/data/total_teacher.json",
+          "/home/runner/workspace/data/teacher_schedules.json",
+          "/home/runner/workspace/data/assigned_teacher.json",
+          "/home/runner/workspace/data/timetable_file.csv"
+        ]
+      },
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-07T22:08:10.391Z",
+      "action": "ProcessError",
+      "details": "Error in autoAssignSubstitutes: TypeError: csv is not a function",
+      "status": "error",
+      "data": {
+        "errorMessage": "csv is not a function",
+        "stack": "TypeError: csv is not a function\n    at <anonymous> (/home/runner/workspace/server/substitute-manager.ts:1123:15)\n    at new Promise (<anonymous>)\n    at SubstituteManager.loadTimetable (/home/runner/workspace/server/substitute-manager.ts:1120:12)\n    at SubstituteManager.autoAssignSubstitutes (/home/runner/workspace/server/substitute-manager.ts:252:14)\n    at <anonymous> (/home/runner/workspace/server/routes.ts:427:36)"
+      },
+      "durationMs": 14
+    }
+  ]
+}

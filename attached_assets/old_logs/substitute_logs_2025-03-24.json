@@ -1,0 +1,47 @@
+{
+  "2025-03-24": [
+    {
+      "timestamp": "2025-03-24T05:21:32.657Z",
+      "action": "ProcessStart",
+      "details": "Initializing substitute assignment system",
+      "status": "info",
+      "data": {
+        "version": "2.1-diagnostic"
+      },
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-24T05:21:32.657Z",
+      "action": "DataLoading",
+      "details": "Using 1 provided absent teachers",
+      "status": "info",
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-24T05:21:32.657Z",
+      "action": "DataLoading",
+      "details": "Loading source files",
+      "status": "info",
+      "data": {
+        "files": [
+          "C:\\Users\\HP\\Downloads\\android-studio\\Android-Substitue-Managment-App\\data\\total_teacher.json",
+          "C:\\Users\\HP\\Downloads\\android-studio\\Android-Substitue-Managment-App\\data\\teacher_schedules.json",
+          "C:\\Users\\HP\\Downloads\\android-studio\\Android-Substitue-Managment-App\\data\\assigned_teacher.json",
+          "C:\\Users\\HP\\Downloads\\android-studio\\Android-Substitue-Managment-App\\data\\timetable_file.csv"
+        ]
+      },
+      "durationMs": 0
+    },
+    {
+      "timestamp": "2025-03-24T05:21:32.667Z",
+      "action": "ProcessError",
+      "details": "Error in autoAssignSubstitutes: Error: Invalid Record Length: expect 17, got 18 on line 20",
+      "status": "error",
+      "data": {
+        "errorMessage": "Invalid Record Length: expect 17, got 18 on line 20",
+        "stack": "Error: Invalid Record Length: expect 17, got 18 on line 20\n    at Object.__onRecord (file:///C:/Users/HP/Downloads/android-studio/Android-Substitue-Managment-App/node_modules/csv-parse/lib/api/index.js:493:15)\n    at Object.parse (file:///C:/Users/HP/Downloads/android-studio/Android-Substitue-Managment-App/node_modules/csv-parse/lib/api/index.js:333:40)\n    at Parser._transform (file:///C:/Users/HP/Downloads/android-studio/Android-Substitue-Managment-App/node_modules/csv-parse/lib/index.js:32:26)\n    at Transform._write (node:internal/streams/transform:171:8)\n    at writeOrBuffer (node:internal/streams/writable:572:12)\n    at _write (node:internal/streams/writable:501:10)\n    at Writable.write (node:internal/streams/writable:510:10)\n    at ReadStream.ondata (node:internal/streams/readable:1009:22)\n    at ReadStream.emit (node:events:518:28)\n    at addChunk (node:internal/streams/readable:561:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)\n    at Readable.push (node:internal/streams/readable:392:5)\n    at node:internal/fs/streams:289:14\n    at FSReqCallback.wrapper [as oncomplete] (node:fs:672:5)"
+      },
+      "durationMs": 10
+    }
+  ]
+}
